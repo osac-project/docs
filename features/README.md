@@ -15,4 +15,8 @@ solution. However, the solution should eventually support all of the following:
 * The solution will be designed with clear interfaces between components, allowing customers to replace individual elements (e.g., switch management tooling) with options tailored to their own environment.
 * Provide (as a configuration option) approximate cost information to be exposed to users to enable users to understand the implications of their choices.
 
-All of this adds up to an easy-to-use, on-demand solution that cloud providers can tailor to their needs. The solution keeps each customer securely separated, tracks all hardware and network details, meets compliance requirements, and shows clear, upfront costs. 
+All of this adds up to an easy-to-use, on-demand solution that cloud providers can tailor to their needs. The solution keeps each customer securely separated, tracks all hardware and network details, meets compliance requirements, and shows clear, upfront costs.
+
+## Feature Documentation
+
+* [Console Access](MGMT-22670-console-access.md) - Serial console access for compute instances
