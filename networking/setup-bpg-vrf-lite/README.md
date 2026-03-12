@@ -1,20 +1,20 @@
-# **C-UDN with Provider Network Integration**
+# **CUDN with Provider Network Integration**
 
 ## **Overview & Architecture**
 
-This lab demonstrates how to implement a **ClusterUserDefinedNetwork (C-UDN)**
+This lab demonstrates how to implement a **ClusterUserDefinedNetwork (CUDN)**
 integrated with a Managed Service Provider (MSP) network fabric using **BGP**
 and **VRF-Lite**.
 
-- **C-UDN Isolation:** A Kubernetes namespace (or group of namespaces) is
-  assigned to a C-UDN. This allows pods to receive IP addresses outside the
+- **CUDN Isolation:** A Kubernetes namespace (or group of namespaces) is
+  assigned to a CUDN. This allows pods to receive IP addresses outside the
   cluster's primary Pod CIDR, providing complete network isolation at the
   workload level.
 - **Provider Network Integration:** The OpenShift (OCP) cluster nodes peer with
   the MSP network fabric using BGP.
 - **Architecture Decision:** We are using **VRF-Lite**. We use a dedicated VLAN
-  for each C-UDN and peer to the fabric over this VLAN interface. This preserves
-  C-UDN isolation end-to-end within the customer network.
+  for each CUDN and peer to the fabric over this VLAN interface. This preserves
+  CUDN isolation end-to-end within the customer network.
 
 ### **Nomenclature**
 
@@ -28,10 +28,10 @@ and **VRF-Lite**.
   **ASN**                          Autonomous System Number; identifies a BGP
                                    speaker.
 
-  **C-UDN**                        ClusterUserDefinedNetwork; an OCP resource
+  **CUDN** C                       lusterUserDefinedNetwork; an OCP resource
                                    that defines a user-defined network
                                    (e.g. Layer2) and which namespaces use it.
-                                   In this setup the C-UDN is the **primary**
+                                   In this setup the CUDN is the **primary**
                                    network for pods and Kubevirt Virtual
                                    Machines in those namespaces.
 
@@ -44,11 +44,11 @@ and **VRF-Lite**.
                                    the cluster peers with.
 
   **OVN-Kubernetes**               OpenShift's default network provider;
-                                   provides C-UDN and route advertisement
+                                   provides CUDN and route advertisement
                                    integration.
 
   **RouteAdvertisements**          OCP resource that controls which networks
-                                   (e.g. C-UDN pod subnets) are advertised over
+                                   (e.g. CUDN pod subnets) are advertised over
                                    BGP.
 
   **VLAN**                         Virtual LAN; a layer-2 segment used to carry
@@ -59,7 +59,7 @@ and **VRF-Lite**.
                                    routing table so tenant traffic is kept
                                    separate.
 
-  **VRF-Lite**                     Each C-UDN uses a dedicated VLAN and VRF
+  **VRF-Lite**                     Each CUDN uses a dedicated VLAN and VRF
                                    end-to-end: traffic is isolated per tenant
                                    using separate routing tables and layer-2
                                    segments, without a tunneling overlay.
@@ -78,14 +78,15 @@ and **VRF-Lite**.
 
 This lab runs everything as VMs on a **single RHEL host** (Libvirt/KVM): OCP
 nodes and a Fedora router VM. You can instead use a cluster provisioned
-elsewhere (IPI, UPI, existing) and a **real router** or MSP fabric; the
-per-tenant steps are the same.
+elsewhere (existing or provisioned using
+[Assisted-Installer](https://console.redhat.com/openshift/assisted-installer/clusters/~new))
+and a **real router** or MSP fabric; the per-tenant steps are the same.
 
 ![Topology](topology.png)
 
 **Bird's-eye view: expected setup**
 
-Summary of actions to configure a C-UDN + BGP + VRF-Lite setup:
+Summary of actions to configure a CUDN + BGP + VRF-Lite setup:
 
 - **Initial (one-time):**
   - **Cluster:** Provision or use OCP with OVN-Kubernetes; enable routing via
@@ -94,8 +95,8 @@ Summary of actions to configure a C-UDN + BGP + VRF-Lite setup:
   - **Router/fabric:** Deploy the router or fabric that will peer with the
     cluster; define BGP peering subnets and ASNs.
 - **Per-tenant:**
-  - **Cluster:** Namespace + C-UDN (pod subnet); on each worker create VLAN,
-    attach to C-UDN's VRF, set BGP peering address; create FRRConfiguration and
+  - **Cluster:** Namespace + CUDN (pod subnet); on each worker create VLAN,
+    attach to CUDN's VRF, set BGP peering address; create FRRConfiguration and
     RouteAdvertisements.
   - **Router/fabric:** Expose tenant VLAN to router; create VRF and VLAN
     interface with peering address; configure BGP in that VRF to peer with
@@ -110,9 +111,13 @@ Do this once; then repeat **Part II** for each tenant.
 
 In this lab the cluster is provisioned with dev-scripts on the same host as the
 router VM; any cluster with OVN-Kubernetes, host networking control on workers,
-and a supported OCP version is fine (IPI, UPI, existing).
+and a supported OCP version is fine (existing or provisioned using
+[Assisted-Installer](https://console.redhat.com/openshift/assisted-installer/clusters/~new)).
 
 **Provision the cluster (this lab: dev-scripts on the host)**
+
+If you install the cluster some other way, skip to the next section **Enable
+cluster-wide networking options**.
 
 Run on the host that will act as hypervisor (or from your usual provisioning
 environment if the cluster is elsewhere):
@@ -146,7 +151,7 @@ logged in)**
 
 These patches enable routing via the host, the FRR provider, route
 advertisements, and global IP forwarding so OVN-Kubernetes can use the host's
-secondary interfaces for C-UDN/VRF traffic.
+secondary interfaces for CUDN/VRF traffic.
 
 `oc patch network.operator.openshift.io/cluster --type=merge -p '{"spec":{"defaultNetwork":{"ovnKubernetesConfig":{"gatewayConfig":{"routingViaHost":true}}}}}'`
 
@@ -237,15 +242,15 @@ each worker via `oc debug node/…` or SSH (or NMState in production).
 
 Example ranges (keep consistent and non-overlapping):
 
-- **C-UDN pod subnet** (e.g. `10.0.1.0/24`): for pods in the tenant network.
+- **CUDN pod subnet** (e.g. `10.0.1.0/24`): for pods in the tenant network.
 - **BGP peering subnet** (e.g. `10.0.5.0/24`): underlay between worker VLAN
   interface and router (e.g. worker `10.0.5.11/24`, router `10.0.5.12/24`).
 
-### **II.1 Create the tenant namespace and C-UDN**
+### **II.1 Create the tenant namespace and CUDN**
 
 Run from your workstation with `oc`. Creating the ClusterUserDefinedNetwork
-causes the cluster to create a VRF on each worker (the VRF name matches the
-C-UDN name). Example for tenant `tenant1` and C-UDN `tenant1-net`:
+causes the cluster to create a VRF on each worker (the VRF name matches the CUDN
+name). Example for tenant `tenant1` and CUDN `tenant1-net`:
 
         cat << 'EOF' > tenant1_ns.yaml
         apiVersion: v1
@@ -280,7 +285,7 @@ C-UDN name). Example for tenant `tenant1` and C-UDN `tenant1-net`:
 
         oc apply -f cudn.yaml
 
-The `subnets: [10.0.1.0/24]` is the pod subnet for this C-UDN; choose a range
+The `subnets: [10.0.1.0/24]` is the pod subnet for this CUDN; choose a range
 that does not overlap with the cluster network or the machine network.
 
 ### **II.2 Host network configuration on each worker**
@@ -288,8 +293,7 @@ that does not overlap with the cluster network or the machine network.
 Perform these steps on **every worker node**. To get a shell on a worker, run
 `oc debug node/<worker-node-name>` (or SSH if you have direct access). Replace
 the primary interface name (e.g. `enp1s0`) and VLAN id (e.g. `101`) with the
-values for your environment. The VRF name is the C-UDN name
-(e.g. `tenant1-net`).
+values for your environment. The VRF name is the CUDN name (e.g. `tenant1-net`).
 
 Identify the primary interface: `ip a`
 
@@ -300,7 +304,7 @@ Create the VLAN device and bring it up:
 
 Verify: `ip a | grep enp1s0.101`
 
-Link the VLAN to the C-UDN's VRF and add an address in the BGP peering subnet.
+Link the VLAN to the CUDN's VRF and add an address in the BGP peering subnet.
 Use a different IP per worker (e.g. `10.0.5.11/24` on worker 1). Bounce the link
 so the kernel moves routes into the VRF:
 
@@ -326,7 +330,7 @@ Run from your workstation with `oc`. These two custom resources work together:
 - **RouteAdvertisements:** Tells OVN-Kubernetes which networks to advertise over
   BGP. It selects FRRConfigurations via the label
   (`routeAdvertisements: tenants-frr`) and specifies that the **PodNetwork** of
-  selected C-UDNs (those with label `export: "true"`) should be advertised. So
+  selected CUDNs (those with label `export: "true"`) should be advertised. So
   the tenant's pod subnet (e.g. `10.0.1.0/24`) is announced to the router.
 
 Adjust names and labels if you use multiple FRRConfiguration resources.
@@ -380,7 +384,7 @@ Adjust names and labels if you use multiple FRRConfiguration resources.
 
         oc apply -f routead.yaml
 
-For a second tenant, repeat Part II with a new namespace/C-UDN (e.g. `tenant2`,
+For a second tenant, repeat Part II with a new namespace/CUDN (e.g. `tenant2`,
 `tenant2-net`), a different VLAN id (e.g. `102`), and a distinct BGP peering
 subnet or IPs per worker.
 
@@ -433,7 +437,7 @@ tenant. First tenant example below.
 
 - **VRF and interface:** FRR is told about `vrf-101` and that `enp2s0.101` is in
   that VRF so BGP runs in the correct routing context.
-- **Prefix-list and route-map:** We only accept this tenant's C-UDN pod subnet
+- **Prefix-list and route-map:** We only accept this tenant's CUDN pod subnet
   (`10.0.1.0/24`) from the cluster, not arbitrary routes.
 - **BGP in vrf-101:** Router AS 65001 peers with the cluster at `10.0.5.11` (AS
   65002). The cluster advertises the pod network; the route-map limits what we
@@ -530,10 +534,10 @@ routing from inside a pod (e.g. `oc apply -f -` with the manifest below):
 You can add a second OCP cluster (e.g. SNO via [Assisted Installer
 SaaS](https://console.redhat.com/openshift/assisted-installer/clusters/~new)),
 attach its VM to the libvirt default network and `testpr` (created in Part I),
-then repeat the Part II steps for that cluster (create tenant NS and C-UDN, then
+then repeat the Part II steps for that cluster (create tenant NS and CUDN, then
 on each node: check VRF, create VLAN device, enslave VLAN to VRF, add address).
 On the second cluster's nodes you will use that cluster's interface name (e.g.
-`enp7s0`) and the same VLAN id; the VRF name is the C-UDN name (e.g.
+`enp7s0`) and the same VLAN id; the VRF name is the CUDN name (e.g.
 `tenant2-net`). On the router VM, add a new VLAN interface and address for the
 second cluster's segment and extend `frr.conf` with the new BGP neighbor if
 needed.
