@@ -8,6 +8,8 @@ OSAC operator.
 
 - [Concepts](#concepts)
 - [First-time setup](#first-time-setup)
+  - [Step 3a: Dedicated tenant StorageClass](#step-3a-dedicated-tenant-storageclass-target-cluster)
+  - [Step 3b: Shared default StorageClass (optional)](#step-3b-shared-default-storageclass-optional-target-cluster)
 - [Returning users: what has changed](#returning-users-what-has-changed)
 - [Creating a ComputeInstance](#creating-a-computeinstance)
 - [Troubleshooting](#troubleshooting)
@@ -67,12 +69,43 @@ exist on the target cluster. The names must match exactly.
 
 ### Tenant Ready condition
 
-A Tenant CR reaches `Ready` only when two conditions are met on the target cluster:
+A Tenant CR reaches `Ready` only when the following are satisfied on the **target** cluster:
 
-1. A namespace with the same name as the Tenant CR exists.
-2. Exactly one StorageClass labeled `osac.openshift.io/tenant: <tenant-name>` exists.
+1. **Namespace**: a namespace with the same name as the Tenant CR exists.
+2. **StorageClass** (priority order — the operator uses the first match that is unambiguous):
+   - **Dedicated**: exactly one StorageClass labeled `osac.openshift.io/tenant: <tenant-name>`
+     (for example `osac.openshift.io/tenant: my-tenant` when the Tenant CR is `my-tenant`).
+   - **Shared fallback**: if no dedicated StorageClass exists, exactly **one** StorageClass
+     labeled `osac.openshift.io/tenant: Default` (capital **D**). This value is a sentinel:
+     it is a valid Kubernetes label value but cannot collide with a Tenant name, because
+     `Default` is not a valid resource name.
+   - If neither case applies, or more than one StorageClass matches the chosen label key,
+     the Tenant stays in `Progressing`.
 
-If either condition is not met, the Tenant stays in `Progressing`.
+The Tenant `status.storageClass` field is set to the name of the resolved StorageClass.
+
+The Tenant also reports **Kubernetes-style status conditions** (for example `NamespaceReady`
+and `StorageClassReady`). Useful `StorageClassReady` reasons include:
+
+| Reason | Meaning |
+|--------|---------|
+| `Found` | A single tenant-specific StorageClass was selected |
+| `SharedDefault` | No tenant-specific class; a single shared `Default`-labeled class was selected |
+| `NotFound` | No suitable StorageClass (missing dedicated and shared, or namespace issue) |
+| `MultipleFound` | More than one StorageClass has `osac.openshift.io/tenant: <tenant-name>` |
+| `MultipleDefaultsFound` | More than one StorageClass has `osac.openshift.io/tenant: Default` |
+
+To inspect conditions:
+
+```bash
+oc get tenant my-tenant -n osac-devel \
+  -o jsonpath='{range .status.conditions[*]}{.type}{"\t"}{.status}{"\t"}{.reason}{"\n"}{end}'
+```
+
+The same StorageClass priority is applied when Ansible provisions workloads: if there is no
+tenant-specific class, automation falls back to the shared `Default` class and emits a
+**warning** that storage is not isolated to that tenant. If you need isolation, create a
+dedicated labeled StorageClass per tenant.
 
 ---
 
@@ -155,16 +188,17 @@ Apply it:
 oc apply -f tenant.yaml
 ```
 
-After applying, the Tenant will be in `Progressing` because the StorageClass does not exist
-yet. It will not become `Ready` until Step 3 is complete.
+After applying, the Tenant may be in `Progressing` until storage is resolved: either you
+create a **dedicated** StorageClass ([Step 3a](#step-3a-dedicated-tenant-storageclass-target-cluster)),
+or the cluster already provides a **shared** default ([Step 3b](#step-3b-shared-default-storageclass-optional-target-cluster)).
 
 ---
 
-### Step 3: Create the tenant StorageClass (target cluster)
+### Step 3a: Dedicated tenant StorageClass (target cluster)
 
-The operator discovers storage for a tenant by looking for a StorageClass with the label
-`osac.openshift.io/tenant: <tenant-name>`. There must be exactly one such StorageClass per
-tenant.
+Use this when you want storage **isolated** to your tenant. The operator prefers a
+StorageClass labeled `osac.openshift.io/tenant: <tenant-name>`. There must be **exactly one**
+such StorageClass for your tenant name.
 
 The StorageClass provisioner and parameters depend on what storage is available on your
 target cluster. The example below uses LVMS (topolvm):
@@ -199,9 +233,44 @@ oc apply -f storageclass.yaml
 
 ---
 
+### Step 3b: Shared default StorageClass (optional, target cluster)
+
+If your environment does **not** require per-tenant storage isolation, a **CSP admin**
+(platform operator with permissions to create cluster-wide `StorageClass` objects) can
+install **one** shared StorageClass labeled `osac.openshift.io/tenant: Default`. Any tenant
+that does not have its own dedicated class (Step 3a) will use this shared class, and the
+Tenant can still become `Ready`.
+
+Example (adjust `provisioner` and `parameters` for your platform):
+
+```yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: osac-shared-default-sc
+  labels:
+    osac.openshift.io/tenant: Default
+provisioner: topolvm.io
+parameters:
+  csi.storage.k8s.io/fstype: xfs
+  topolvm.io/device-class: vg1
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+```
+
+There must be **at most one** StorageClass with `osac.openshift.io/tenant: Default`. If more
+than one exists, the Tenant controller cannot choose a shared default and the Tenant stays
+in `Progressing` (`StorageClassReady` reason `MultipleDefaultsFound`).
+
+If you skip Step 3a and rely on Step 3b, you do not create a tenant-specific StorageClass
+unless you later need isolation.
+
+---
+
 ### Step 4: Verify the Tenant is Ready
 
-Once the namespace and StorageClass are in place, the Tenant should transition to `Ready`:
+Once the namespace and StorageClass resolution succeed, the Tenant should transition to `Ready`:
 
 ```bash
 oc get tenant my-tenant -n osac-devel \
@@ -215,13 +284,30 @@ For more detail:
 oc get tenant my-tenant -n osac-devel -o yaml
 ```
 
-The `status` section will show:
+When you use a **dedicated** StorageClass (Step 3a), `status` will look like:
 
 ```yaml
 status:
   phase: Ready
   namespace: my-tenant
   storageClass: my-tenant-default
+```
+
+When you rely on the **shared** default (Step 3b only), `storageClass` is the shared class
+name and `StorageClassReady` uses reason `SharedDefault`, for example:
+
+```yaml
+status:
+  phase: Ready
+  namespace: my-tenant
+  storageClass: osac-shared-default-sc
+  conditions:
+    - type: NamespaceReady
+      status: "True"
+      reason: Found
+    - type: StorageClassReady
+      status: "True"
+      reason: SharedDefault
 ```
 
 If it stays `Progressing`, see [Troubleshooting](#troubleshooting).
@@ -272,20 +358,33 @@ to create it fresh.
 oc delete tenant my-tenant -n osac-devel
 ```
 
-### StorageClass labeling is now required
+### StorageClass resolution (dedicated or shared)
 
-The Tenant controller now requires exactly one StorageClass labeled
-`osac.openshift.io/tenant: <tenant-name>` to exist before the Tenant can become `Ready`.
+The Tenant controller resolves storage in this order:
 
-If you have an existing Tenant that is stuck in `Progressing` after updating the operator,
-check whether a labeled StorageClass exists:
+1. Exactly one StorageClass with `osac.openshift.io/tenant: <your-tenant-name>`, or
+2. If none, exactly one StorageClass with `osac.openshift.io/tenant: Default`.
+
+You no longer **must** create a per-tenant StorageClass if your cluster already has a valid
+shared default (see [Step 3b](#step-3b-shared-default-storageclass-optional-target-cluster)).
+You still must not have **multiple** StorageClasses with the same tenant label value for the
+same resolution path (duplicate dedicated labels for your tenant, or duplicate `Default`
+labels cluster-wide).
+
+If a Tenant is stuck in `Progressing` after upgrading the operator, check both paths:
 
 ```bash
 oc get sc -l osac.openshift.io/tenant=my-tenant
+oc get sc -l osac.openshift.io/tenant=Default
 ```
 
-If no StorageClass is returned, follow [Step 3](#step-3-create-the-tenant-storageclass-target-cluster)
-to create one. If more than one is returned, remove the label from all but one.
+- If the first command returns **one** SC, you are using a dedicated class.
+- If the first returns **none** and the second returns **one** SC, you are using the shared
+  fallback.
+- If either query returns **more than one** SC, remove or relabel until only one remains for
+  that label value.
+
+To create a dedicated class, follow [Step 3a](#step-3a-dedicated-tenant-storageclass-target-cluster).
 
 ### Networking CRDs must be applied when upgrading
 
@@ -337,6 +436,15 @@ namespace.
 
 The `osac.openshift.io/tenant` annotation must match the Tenant CR name exactly.
 
+When using **fulfillment-cli** or other tooling that authenticates with a **service account
+token**, the effective tenant name used during provisioning (for example
+`spec.tenantReference.name` on the ComputeInstance) must match the Tenant CR you expect.
+A token from the **tenant namespace** typically yields that tenant name; a token from the
+**operator namespace** may yield a different name and therefore a different StorageClass
+lookup (dedicated label vs shared `Default`). If provisioning fails with storage errors,
+verify which tenant name the API request is using and that StorageClasses exist for that
+resolution path.
+
 ```yaml
 apiVersion: osac.openshift.io/v1alpha1
 kind: ComputeInstance
@@ -352,7 +460,6 @@ spec:
   memoryGiB: 4
   bootDisk:
     sizeGiB: 20
-    # storageClass: my-tenant-default  # optional: omit to auto-discover from tenant label
   image:
     sourceType: registry
     sourceRef: quay.io/containerdisks/fedora:latest
@@ -370,9 +477,11 @@ oc apply -f computeinstance.yaml
 oc get computeinstance my-vm -n osac-devel -w
 ```
 
-The `bootDisk.storageClass` field is optional. When omitted, the operator discovers the
-StorageClass automatically from the tenant label. You can also set it explicitly to override
-the tenant StorageClass with any other StorageClass available on the target cluster.
+`DiskSpec` (used for `bootDisk` and `additionalDisks`) only carries disk size; there is no
+`storageClass` field on the ComputeInstance spec. Provisioning always resolves the
+StorageClass automatically using the same dedicated-then-shared label priority as the Tenant
+controller (the `tenant_storage_class` Ansible role queries tenant-specific labels first,
+then the shared `Default` label).
 
 ---
 
@@ -380,14 +489,23 @@ the tenant StorageClass with any other StorageClass available on the target clus
 
 ### Tenant stays in Progressing
 
-Check that both prerequisites are met:
+Check prerequisites on the **target** cluster:
 
 ```bash
-# Namespace exists on the target cluster
+# Namespace exists
 oc get namespace my-tenant
 
-# Exactly one labeled StorageClass exists
+# Dedicated path: at most one SC for this tenant name
 oc get sc -l osac.openshift.io/tenant=my-tenant
+
+# Shared path: at most one SC with the Default sentinel (only relevant if dedicated is empty)
+oc get sc -l osac.openshift.io/tenant=Default
+```
+
+Inspect `status.conditions` on the Tenant (see [Tenant Ready condition](#tenant-ready-condition)):
+
+```bash
+oc get tenant my-tenant -n osac-devel -o yaml
 ```
 
 Check the operator logs for the reconcile message:
@@ -401,8 +519,9 @@ Common log messages:
 | Message | Cause |
 |---------|-------|
 | `namespace not found` | The tenant namespace does not exist on the target cluster |
-| `no StorageClass found` | No StorageClass has the tenant label |
-| `count: 2` (or higher) | More than one StorageClass has the tenant label |
+| `no StorageClass found` / `NotFound` | Neither a dedicated SC for the tenant nor a single shared `Default` SC |
+| `count: 2` (or higher) for tenant label | More than one StorageClass shares `osac.openshift.io/tenant: <tenant-name>` (`MultipleFound`) |
+| Multiple `Default` SCs | More than one StorageClass has `osac.openshift.io/tenant: Default` (`MultipleDefaultsFound`) |
 
 ### Operator controllers do not start
 
