@@ -37,11 +37,11 @@ The EDA Provider is the default and requires an EDA service deployment.
    ```yaml
    # config/manager/manager.yaml
    env:
-     - name: CLOUDKIT_PROVISIONING_PROVIDER
-       value: "eda"
-     - name: CLOUDKIT_COMPUTE_INSTANCE_PROVISION_WEBHOOK
+     - name: OSAC_PROVISIONING_PROVIDER
+       value: "eda"  # Must be set explicitly; AAP direct is the default
+     - name: OSAC_COMPUTE_INSTANCE_PROVISION_WEBHOOK
        value: "http://innabox-eda-service:5000/create-compute-instance"
-     - name: CLOUDKIT_COMPUTE_INSTANCE_DEPROVISION_WEBHOOK
+     - name: OSAC_COMPUTE_INSTANCE_DEPROVISION_WEBHOOK
        value: "http://innabox-eda-service:5000/delete-compute-instance"
    ```
 
@@ -109,20 +109,19 @@ The AAP Direct Provider communicates directly with AAP's REST API.
    ```yaml
    # config/manager/manager.yaml
    env:
-     - name: CLOUDKIT_PROVISIONING_PROVIDER
-       value: "aap"
-     - name: CLOUDKIT_AAP_URL
+     # OSAC_PROVISIONING_PROVIDER defaults to "aap", no need to set explicitly
+     - name: OSAC_AAP_URL
        value: "https://aap.example.com/api/controller"
-     - name: CLOUDKIT_AAP_TOKEN
+     - name: OSAC_AAP_TOKEN
        valueFrom:
          secretKeyRef:
            name: aap-credentials
            key: token
-     - name: CLOUDKIT_AAP_PROVISION_TEMPLATE
+     - name: OSAC_AAP_PROVISION_TEMPLATE
        value: "innabox-create-compute-instance"
-     - name: CLOUDKIT_AAP_DEPROVISION_TEMPLATE
+     - name: OSAC_AAP_DEPROVISION_TEMPLATE
        value: "innabox-delete-compute-instance"
-     - name: CLOUDKIT_AAP_STATUS_POLL_INTERVAL
+     - name: OSAC_AAP_STATUS_POLL_INTERVAL
        value: "30s"
    ```
 
@@ -229,10 +228,10 @@ Migrating from EDA to AAP Direct provides better feedback and error visibility.
    # Edit operator deployment
    kubectl edit deployment cloudkit-operator-controller-manager -n cloudkit-system
 
-   # Change environment variables:
-   # - CLOUDKIT_PROVISIONING_PROVIDER: "aap"
-   # - Add CLOUDKIT_AAP_* variables
-   # - Remove CLOUDKIT_COMPUTE_INSTANCE_*_WEBHOOK variables
+   # AAP direct is now the default, so:
+   # - Remove OSAC_PROVISIONING_PROVIDER (or set to "aap")
+   # - Add OSAC_AAP_* variables
+   # - Remove OSAC_COMPUTE_INSTANCE_*_WEBHOOK variables
    ```
 
 4. **Restart Operator:**
@@ -265,7 +264,7 @@ Migrating from EDA to AAP Direct provides better feedback and error visibility.
    kubectl get computeinstance <name> -o json | jq '.status.jobs // [] | map(select(.type == "provision")) | sort_by(.timestamp) | reverse | first'
    ```
 
-**Rollback:**
+**Rollback to EDA:**
 
 If issues occur, rollback to EDA provider:
 
@@ -274,9 +273,9 @@ If issues occur, rollback to EDA provider:
 kubectl edit deployment cloudkit-operator-controller-manager -n cloudkit-system
 
 # Change:
-# - CLOUDKIT_PROVISIONING_PROVIDER: "eda"
-# - Restore CLOUDKIT_COMPUTE_INSTANCE_*_WEBHOOK variables
-# - Remove CLOUDKIT_AAP_* variables
+# - Set OSAC_PROVISIONING_PROVIDER: "eda" (AAP direct is the default, so EDA requires explicit opt-in)
+# - Restore OSAC_COMPUTE_INSTANCE_*_WEBHOOK variables
+# - Remove OSAC_AAP_* variables
 
 # Restart operator
 kubectl rollout restart deployment/cloudkit-operator-controller-manager -n cloudkit-system
@@ -285,7 +284,7 @@ kubectl rollout restart deployment/cloudkit-operator-controller-manager -n cloud
 **Post-Migration:**
 - Update playbooks to remove annotation-based signaling if desired
 - Monitor AAP API load (polling can increase API calls)
-- Adjust `CLOUDKIT_AAP_STATUS_POLL_INTERVAL` if needed (30s-60s recommended)
+- Adjust `OSAC_AAP_STATUS_POLL_INTERVAL` if needed (30s-60s recommended)
 
 ## Monitoring and Observability
 

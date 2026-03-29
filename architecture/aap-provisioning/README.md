@@ -186,7 +186,7 @@ cloudkit-operator/
 **Job Tracking:**
 - Job info persisted in CR `status.jobs` array
 - Enables crash recovery and observability
-- History configurable via `CLOUDKIT_MAX_JOB_HISTORY` (default: 10)
+- History configurable via `OSAC_MAX_JOB_HISTORY` (default: 10)
 
 **Job Entry Fields:**
 - `jobID` - Job identifier
@@ -205,39 +205,39 @@ cloudkit-operator/
 
 ### Provider Selection
 
-Set via `CLOUDKIT_PROVISIONING_PROVIDER` environment variable.
+Set via `OSAC_PROVISIONING_PROVIDER` environment variable.
 
 **Values:**
-- `eda` - EDA webhook provider (default for backward compatibility)
-- `aap` - AAP Direct REST API provider
+- `aap` - AAP Direct REST API provider (default)
+- `eda` - EDA webhook provider (legacy, requires explicit opt-in)
 
 ### Configuration Comparison
 
 | Setting | EDA Provider | AAP Direct Provider |
 |---------|-------------|---------------------|
 | **Required** | | |
-| `CLOUDKIT_PROVISIONING_PROVIDER` | `"eda"` | `"aap"` |
-| `CLOUDKIT_COMPUTE_INSTANCE_PROVISION_WEBHOOK` | URL to EDA create endpoint | N/A |
-| `CLOUDKIT_COMPUTE_INSTANCE_DEPROVISION_WEBHOOK` | URL to EDA delete endpoint | N/A |
-| `CLOUDKIT_AAP_URL` | N/A | AAP Controller API URL (with `/api/controller`) |
-| `CLOUDKIT_AAP_TOKEN` | N/A | Secret reference to AAP OAuth2 token |
-| `CLOUDKIT_AAP_PROVISION_TEMPLATE` | N/A | AAP template name for provision |
-| `CLOUDKIT_AAP_DEPROVISION_TEMPLATE` | N/A | AAP template name for deprovision |
+| `OSAC_PROVISIONING_PROVIDER` | `"eda"` | `"aap"` |
+| `OSAC_COMPUTE_INSTANCE_PROVISION_WEBHOOK` | URL to EDA create endpoint | N/A |
+| `OSAC_COMPUTE_INSTANCE_DEPROVISION_WEBHOOK` | URL to EDA delete endpoint | N/A |
+| `OSAC_AAP_URL` | N/A | AAP Controller API URL (with `/api/controller`) |
+| `OSAC_AAP_TOKEN` | N/A | Secret reference to AAP OAuth2 token |
+| `OSAC_AAP_PROVISION_TEMPLATE` | N/A | AAP template name for provision |
+| `OSAC_AAP_DEPROVISION_TEMPLATE` | N/A | AAP template name for deprovision |
 | **Optional** | | |
-| `CLOUDKIT_MINIMUM_REQUEST_INTERVAL` | Min time between webhook calls (e.g., `10m`) | N/A |
-| `CLOUDKIT_AAP_STATUS_POLL_INTERVAL` | N/A | Job status poll interval (default: `30s`) |
+| `OSAC_MINIMUM_REQUEST_INTERVAL` | Min time between webhook calls (e.g., `10m`) | N/A |
+| `OSAC_AAP_STATUS_POLL_INTERVAL` | N/A | Job status poll interval (default: `30s`) |
 
-### EDA Provider Example
+### EDA Provider Example (Legacy)
 
 ```yaml
 env:
-  - name: CLOUDKIT_PROVISIONING_PROVIDER
-    value: "eda"
-  - name: CLOUDKIT_COMPUTE_INSTANCE_PROVISION_WEBHOOK
+  - name: OSAC_PROVISIONING_PROVIDER
+    value: "eda"  # Must be set explicitly; AAP direct is the default
+  - name: OSAC_COMPUTE_INSTANCE_PROVISION_WEBHOOK
     value: "http://innabox-eda-service:5000/create-compute-instance"
-  - name: CLOUDKIT_COMPUTE_INSTANCE_DEPROVISION_WEBHOOK
+  - name: OSAC_COMPUTE_INSTANCE_DEPROVISION_WEBHOOK
     value: "http://innabox-eda-service:5000/delete-compute-instance"
-  - name: CLOUDKIT_MINIMUM_REQUEST_INTERVAL
+  - name: OSAC_MINIMUM_REQUEST_INTERVAL
     value: "10m"
 ```
 
@@ -251,20 +251,19 @@ env:
 
 ```yaml
 env:
-  - name: CLOUDKIT_PROVISIONING_PROVIDER
-    value: "aap"
-  - name: CLOUDKIT_AAP_URL
+  # OSAC_PROVISIONING_PROVIDER defaults to "aap", no need to set explicitly
+  - name: OSAC_AAP_URL
     value: "https://aap.example.com/api/controller"
-  - name: CLOUDKIT_AAP_TOKEN
+  - name: OSAC_AAP_TOKEN
     valueFrom:
       secretKeyRef:
         name: aap-credentials
         key: token
-  - name: CLOUDKIT_AAP_PROVISION_TEMPLATE
+  - name: OSAC_AAP_PROVISION_TEMPLATE
     value: "innabox-create-compute-instance"
-  - name: CLOUDKIT_AAP_DEPROVISION_TEMPLATE
+  - name: OSAC_AAP_DEPROVISION_TEMPLATE
     value: "innabox-delete-compute-instance"
-  - name: CLOUDKIT_AAP_STATUS_POLL_INTERVAL
+  - name: OSAC_AAP_STATUS_POLL_INTERVAL
     value: "30s"
 ```
 
@@ -312,7 +311,7 @@ curl -X POST https://aap-url/api/v2/tokens/ \
 ### Configuration Notes
 
 **EDA:**
-- `CLOUDKIT_MINIMUM_REQUEST_INTERVAL` is client-side rate limiting, not polling
+- `OSAC_MINIMUM_REQUEST_INTERVAL` is client-side rate limiting, not polling
 - Prevents webhook flooding during reconciliation loops
 - WebhookClient caches recent requests and skips duplicates within interval
 

@@ -182,7 +182,7 @@ This scenario verifies the EDA provider still works as expected.
 ```bash
 # 1. Ensure operator is configured for EDA provider
 kubectl get deployment cloudkit-operator-controller-manager -n cloudkit-system \
-  -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="CLOUDKIT_PROVISIONING_PROVIDER")].value}'
+  -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="OSAC_PROVISIONING_PROVIDER")].value}'
 # Expected: "eda"
 
 # 2. Create ComputeInstance
