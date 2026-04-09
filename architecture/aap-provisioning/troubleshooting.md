@@ -30,7 +30,7 @@ For architecture details, see [README.md](README.md).
 | Template not found | Error: "Template 'foo' not found" | Template name mismatch or template doesn't exist | List templates: `curl -H "Authorization: Bearer $TOKEN" $AAP_URL/job_templates/`. Verify `OSAC_AAP_PROVISION_TEMPLATE` matches AAP template name exactly (case-sensitive). |
 | Cancellation not allowed | Error: "405 Method Not Allowed" when canceling | Job already in terminal state | Job reached terminal state between check and cancel. Operator proceeds with deprovision. This is normal and not an error. |
 | SSL certificate error | Error: "x509: certificate signed by unknown authority" | AAP uses self-signed certificate or custom CA | Add CA certificate to operator deployment. Mount CA cert as volume and set `SSL_CERT_FILE` environment variable. Or disable SSL verification (not recommended for production). |
-| Poll interval too aggressive | AAP API rate limiting errors | Poll interval set too low | Increase `OSAC_AAP_STATUS_POLL_INTERVAL` to 30s or 60s. Monitor AAP API load. |
+| Poll interval too aggressive | AAP API rate-limiting errors | Poll interval set too low | Increase `OSAC_AAP_STATUS_POLL_INTERVAL` to 30s or 60s. Monitor AAP API load. |
 
 ## Debugging Commands
 
