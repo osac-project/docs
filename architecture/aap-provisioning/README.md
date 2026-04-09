@@ -216,7 +216,7 @@ Set via `OSAC_PROVISIONING_PROVIDER` environment variable.
 | Setting | EDA Provider | AAP Direct Provider |
 |---------|-------------|---------------------|
 | **Required** | | |
-| `OSAC_PROVISIONING_PROVIDER` | `"eda"` | `"aap"` |
+| `OSAC_PROVISIONING_PROVIDER` | `"eda"` (must set explicitly) | `"aap"` (default, optional) |
 | `OSAC_COMPUTE_INSTANCE_PROVISION_WEBHOOK` | URL to EDA create endpoint | N/A |
 | `OSAC_COMPUTE_INSTANCE_DEPROVISION_WEBHOOK` | URL to EDA delete endpoint | N/A |
 | `OSAC_AAP_URL` | N/A | AAP Controller API URL (with `/api/controller`) |

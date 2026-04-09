@@ -13,7 +13,7 @@ For architecture details, see [README.md](README.md).
 
 ## Deploying with EDA Provider
 
-The EDA Provider is the default and requires an EDA service deployment.
+The EDA Provider is legacy and requires an EDA service deployment. It must be explicitly enabled by setting `OSAC_PROVISIONING_PROVIDER=eda`.
 
 **Prerequisites:**
 - EDA service deployed and accessible from cloudkit-operator
