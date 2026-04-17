@@ -97,7 +97,7 @@ The Fulfillment Service exists as an API layer for several reasons:
 * Additionally, Namespace-based RBAC in k8s is not sufficient for the level of tenant separation required.
 * Multiple Management Clusters may exist in a deployment as discussed above, and this layer enables topology awareness and the ability to schedule requests onto different Management Clusters as appropriate.
 
-The Fulfillment CLI integrates with this API; service providers may also
+The `osac` CLI integrates with this API; service providers may also
 integrate their own UIs with this API.
 
 ### O-SAC Controller
@@ -188,7 +188,7 @@ to identify the user and tenant.
 ### User Interfaces
 
 OSAC includes [a command-line
-utility](https://github.com/innabox/fulfillment-cli) that can be used to
+utility](https://github.com/osac-project/fulfillment-service) that can be used to
 interact with the API.
 
 OSAC may also include a web UI that can be used for demos or proofs of concept.

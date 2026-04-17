@@ -436,7 +436,7 @@ namespace.
 
 The `osac.openshift.io/tenant` annotation must match the Tenant CR name exactly.
 
-When using **fulfillment-cli** or other tooling that authenticates with a **service account
+When using **osac** or other tooling that authenticates with a **service account
 token**, the effective tenant name used during provisioning (for example
 `spec.tenantReference.name` on the ComputeInstance) must match the Tenant CR you expect.
 A token from the **tenant namespace** typically yields that tenant name; a token from the

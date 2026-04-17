@@ -32,7 +32,7 @@ skinparam note {
 }
 
 rectangle "User Interface" #B3E5FC {
-    component [fulfillment-cli] as CLI #81D4FA
+    component [osac] as CLI #81D4FA
 }
 
 rectangle "Control Plane" #C5E1A5 {

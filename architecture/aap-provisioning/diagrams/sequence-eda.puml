@@ -8,7 +8,7 @@ skinparam backgroundColor white
 skinparam sequenceMessageAlign center
 
 actor User
-participant "fulfillment-cli" as CLI
+participant "osac" as CLI
 participant "fulfillment-service" as Service
 participant "Kubernetes API" as K8s
 participant "cloudkit-operator" as Operator
