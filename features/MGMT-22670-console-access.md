@@ -90,6 +90,28 @@ The Fulfillment Service connects to the KubeVirt console subresource API
 using the hub's kubeconfig credentials. The service account associated with
 the hub kubeconfig must have permission to access this subresource.
 
+The OSAC installer includes the required RBAC (`base/hub-access/rbac.yaml`).
+If you are using a custom deployment, ensure the hub-access service account
+has a **ClusterRole** (not a namespace-scoped Role) granting `get` access
+to `virtualmachineinstances/console` — VMs may span multiple namespaces
+depending on tenant and subnet configuration:
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: hub-access-console
+rules:
+- apiGroups:
+  - subresources.kubevirt.io
+  resources:
+  - virtualmachineinstances/console
+  verbs:
+  - get
+```
+
+Bind it to the hub-access service account with a ClusterRoleBinding.
+
 ## Template Configuration
 
 For serial console to be useful, the guest OS inside the VM must be configured
@@ -149,6 +171,7 @@ should monitor for the following:
 | INFO | `Console session timed out` | Server-side timeout expired |
 | WARN | `Running compute instance not found on hub` | VM is running in DB but the CR is missing on the Management Cluster — indicates a sync issue |
 | WARN | `Running compute instance has no VM reference on hub` | CR exists but KubeVirt VM reference is not yet populated — may indicate provisioning is still in progress or the OSAC Controller is not reconciling |
+| ERROR | `Failed to open console backend connection` | WebSocket to KubeVirt failed — typically missing RBAC or hub connectivity. Includes hub, namespace, VM name, and error details |
 | INFO | `Console proxy ended with error` | Backend connection dropped unexpectedly |
 
 ### Common Issues
@@ -162,6 +185,7 @@ should monitor for the following:
 | Console connects but login fails | No password set in guest OS | Update cloud-init to set a password |
 | Session terminates after 30 minutes | Server-side timeout (default) | Increase `OSAC_CONSOLE_SESSION_TIMEOUT` if longer sessions are needed |
 | "active console session" error | Another user is connected | Only one session per VM is allowed; the first session must disconnect |
+| CLI reconnect loop, ERROR log with 403 | Hub-access service account missing KubeVirt RBAC | Add the `hub-access-console` ClusterRole and ClusterRoleBinding (see KubeVirt Prerequisites) |
 | Connection drops immediately | Envoy timeout killing the stream | Verify the console route has `timeout: 0s` in the Envoy config |
 
 ### Capacity Considerations
