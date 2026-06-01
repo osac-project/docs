@@ -12,16 +12,7 @@ For architecture details, see [README.md](README.md).
 
 ## Common Issues
 
-### EDA Provider Issues
-
-| Issue | Symptoms | Root Cause | Solution |
-|-------|----------|------------|----------|
-| Webhook not triggered | Provision job ID never appears in status | EDA service unreachable, network issues | Check EDA service logs: `kubectl logs -n cloudkit-system deployment/eda-service`. Verify webhook URL is correct. Test connectivity from operator pod. |
-| AAP finalizer not set | CR stuck in Deleting, finalizer never removed | AAP playbook not adding finalizer on successful provision | Update AAP playbook to add `cloudkit.openshift.io/compute-instance-finalizer` to `metadata.finalizers`. |
-| Annotation not updated | CR stays in Progressing forever | AAP playbook not setting `reconciled-config-version` annotation | Update AAP playbook to set `cloudkit.openshift.io/reconciled-config-version` annotation to match desired version. |
-| EDA 500 error | Webhook call returns 500 | EDA rulebook error, AAP template misconfiguration | Check EDA logs for rulebook errors. Verify AAP job template exists and is accessible. |
-
-### AAP Direct Provider Issues
+### AAP Provisioning Issues
 
 | Issue | Symptoms | Root Cause | Solution |
 |-------|----------|------------|----------|

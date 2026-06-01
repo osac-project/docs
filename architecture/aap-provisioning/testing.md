@@ -173,64 +173,14 @@ kubectl get computeinstance test-ci-fail -o json | jq '.status.jobs // [] | map(
 - Error details are visible in status
 - Deprovision job is still triggered on deletion (cleanup attempt)
 
-### Scenario 4: EDA Provider (Backward Compatibility)
-
-This scenario verifies the EDA provider still works as expected.
-
-**Steps:**
-
-```bash
-# 1. Ensure operator is configured for EDA provider
-kubectl get deployment cloudkit-operator-controller-manager -n cloudkit-system \
-  -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="OSAC_PROVISIONING_PROVIDER")].value}'
-# Expected: "eda"
-
-# 2. Create ComputeInstance
-kubectl apply -f - <<EOF
-apiVersion: cloudkit.openshift.io/v1alpha1
-kind: ComputeInstance
-metadata:
-  name: test-ci-eda
-  namespace: default
-spec:
-  name: test-vm-eda
-  vcpu: 2
-  memory: 4096
-  disk: 40
-EOF
-
-# 3. Check job ID
-kubectl get computeinstance test-ci-eda -o json | jq -r '.status.jobs // [] | map(select(.type == "provision")) | sort_by(.timestamp) | reverse | first | .jobID'
-# Expected: "eda-webhook-1"
-
-# 4. Check job state
-kubectl get computeinstance test-ci-eda -o json | jq -r '.status.jobs // [] | map(select(.type == "provision")) | sort_by(.timestamp) | reverse | first | .state'
-# Expected: "Unknown"
-
-# 5. Wait for AAP to update annotation
-kubectl get computeinstance test-ci-eda -o jsonpath='{.metadata.annotations.cloudkit\.openshift\.io/reconciled-config-version}'
-# Should match desired-config-version after provision completes
-
-# 6. Verify CR becomes Ready
-kubectl get computeinstance test-ci-eda -o jsonpath='{.status.phase}'
-# Expected: Ready
-```
-
-**Expected Behavior:**
-- Job ID is "eda-webhook-1" (or eda-webhook-2 for subsequent jobs)
-- Job state is "Unknown"
-- CR becomes Ready when annotation is updated by AAP
-- Finalizer is managed by AAP playbook
-
 ## Unit Testing
 
 Unit tests validate individual components in isolation.
 
 **Test Files:**
-- `cloudkit-operator/internal/provisioning/provider_test.go` - Interface contract tests
-- `cloudkit-operator/internal/provisioning/eda_provider_test.go` - EDA provider tests
-- `cloudkit-operator/internal/provisioning/aap_provider_test.go` - AAP provider tests
-- `cloudkit-operator/internal/aap/client_test.go` - AAP client tests
+- `osac-operator/pkg/provisioning/provider_test.go` - Interface contract tests
+- `osac-operator/pkg/provisioning/aap_provider_test.go` - AAP provider tests
+- `osac-operator/internal/aap/client_test.go` - AAP client tests
 
 **Running Unit Tests:**
 

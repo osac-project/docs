@@ -102,11 +102,12 @@ When a ClusterOrder is created or updated, the controller performs these steps:
    - **ServiceAccount**: Identity for cluster-related automation
    - **RoleBindings**: RBAC permissions for the service account to manage cluster resources
 
-3. **EDA Webhook Trigger**: Calls the Event Driven Ansible webhook endpoint to initiate cluster provisioning:
-   - The webhook payload includes the complete ClusterOrder specification.
-   - EDA runs a playbook that is responsible for creating or updating all relevant k8s resources, including the HostedCluster and NodePool. See below for details.
+3. **AAP Job Launch**: Launches the cluster provisioning workflow template via the AAP REST API:
+   - The template receives the complete ClusterOrder specification in `ansible_eda.event.payload` format.
+   - AAP runs a playbook that creates or updates all relevant k8s resources, including the HostedCluster and NodePool. See below for details.
+   - The operator stores the AAP job ID in ClusterOrder status and polls until the job completes.
 
-4. **HostedCluster Monitoring**: After the webhook is triggered, the controller watches for a HostedCluster resource (created by the Ansible automation) and monitors its conditions:
+4. **HostedCluster Monitoring**: While the AAP job runs, the controller watches for a HostedCluster resource (created by the Ansible automation) and monitors its conditions:
    - Waits for the control plane to become available
    - Monitors that the cluster is not degraded
    - Tracks NodePool size
@@ -117,24 +118,21 @@ When a ClusterOrder is created or updated, the controller performs these steps:
    - Cluster reference information (namespace, resource names)
 
 6. **Deletion Handling**: When a ClusterOrder is deleted:
-   - Triggers the deletion webhook to EDA
+   - Launches the cluster deletion workflow template via the AAP REST API
    - Ensures all associated cluster resources are cleaned up
    - Uses finalizers to prevent premature deletion
 
 ### Ansible Automation Platform - Cluster Provisioning
 
-Event Driven Ansible (EDA) running on AAP receives webhook events from the OSAC
-Controller and orchestrates the actual cluster provisioning.
+AAP orchestrates cluster provisioning when the OSAC operator launches workflow templates.
 
-**EDA Rulebook** (`cloudkit-aap/rulebooks/cluster_fulfillment.yml`):
+**Cluster Templates in AAP:**
 
-The rulebook listens on port 5000 and defines rules for cluster lifecycle events:
-- Endpoint: `create-hosted-cluster` → Triggers the cluster creation workflow
-- Endpoint: `delete-hosted-cluster` → Triggers the cluster deletion job
+Templates are named with the configured prefix (for example, `osac-create-hosted-cluster` and `osac-delete-hosted-cluster`). The operator resolves template names from resource type and operation.
 
-When triggered, EDA launches the appropriate workflow template in AAP.
+When launched, AAP runs the appropriate workflow template for cluster creation or deletion.
 
-**Cluster Creation Playbook** (`cloudkit-aap/playbook_cloudkit_create_hosted_cluster.yml`):
+**Cluster Creation Playbook** (`osac-aap/playbook_cloudkit_create_hosted_cluster.yml`):
 
 The main cluster creation workflow consists of these phases:
 
@@ -254,7 +252,7 @@ When a cluster deletion is requested:
 
 1. **Fulfillment Service**: Updates the ClusterOrder to trigger deletion
 2. **OSAC Controller**: Detects deletion and:
-   - Triggers the deletion webhook to EDA
+   - Launches the cluster deletion workflow template via the AAP REST API
    - Sets ClusterOrder phase to "Deleting"
 3. **Ansible Automation**: Executes the deletion playbook which:
    - Removes the HostedCluster resource
@@ -274,7 +272,7 @@ The cluster fulfillment system is designed for scale:
 **Provisioning Throughput**:
 - Multiple clusters can be provisioned concurrently on a single Management Cluster
 - The cluster lock mechanism prevents resource conflicts
-- EDA webhook rate limiting prevents overwhelming AAP
+- AAP job polling provides visibility into long-running provisioning operations
 
 **Horizontal Scaling**:
 - Additional Management Clusters can be added to increase total capacity

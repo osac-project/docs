@@ -1,9 +1,9 @@
-# AAP Provisioning Abstraction and Direct Integration
+# AAP Provisioning
 
-Architecture documentation for the AAP provisioning system.
+Architecture documentation for AAP-based provisioning in the OSAC operator.
 
 **Operational Guides:**
-- [Operations Guide](operations.md) - Deployment, migration, monitoring
+- [Operations Guide](operations.md) - Deployment and monitoring
 - [Testing Guide](testing.md) - Manual testing, unit tests, integration tests
 - [Troubleshooting Guide](troubleshooting.md) - Common issues, debugging, recovery procedures
 
@@ -16,40 +16,29 @@ Architecture documentation for the AAP provisioning system.
 
 ## Overview
 
-The OSAC Controller orchestrates infrastructure provisioning through Ansible Automation Platform (AAP). The controller implements a provider abstraction layer enabling flexible integration models.
+The OSAC operator orchestrates infrastructure provisioning through Ansible Automation Platform (AAP). The operator launches AAP job or workflow templates over the REST API and polls job status until operations complete.
 
-**Problem Statement:** The original Event-Driven Ansible (EDA) webhook approach had limitations:
+**Problem Statement:** Earlier webhook-based approaches had limitations:
 - No job status feedback (fire-and-forget)
-- Unreliable completion signals (annotation-based)
+- Unreliable completion signals
 - No visibility into failures or progress
 - Orphaned cloud resources possible
 
-**Solution:** The `ProvisioningProvider` interface supports two implementations:
-1. **EDA Provider** - Legacy webhook-based (backward compatibility)
-2. **AAP Direct Provider** - REST API-based with full job lifecycle management
-
-**Provider Comparison:**
-
-| Feature | EDA Provider | AAP Direct Provider |
-|---------|-------------|---------------------|
-| Communication | Webhook (fire-and-forget) | REST API (polling) |
-| Job Status | Unknown | Real-time from AAP API |
-| Job Cancellation | Not supported | Supported |
-| Finalizer Management | AAP playbook | Operator |
-| Crash Recovery | Limited (annotation-based) | Full (job ID in CR) |
-| Error Visibility | None | Full traceback |
-| Orphaned Resources | Possible | Prevented via BlockDeletionOnFailure |
+**Solution:** Direct AAP REST API integration with full job lifecycle management:
+- Real-time job status from the AAP API
+- Job cancellation during deletion
+- Operator-managed finalizers
+- Crash recovery via persisted job IDs in CR status
+- Full error tracebacks from failed jobs
 
 For architectural context, see the [main OSAC architecture documentation](../README.md).
 
 ## Architecture
 
-### Provider Abstraction Layer
-
-The provisioning system is built around a provider interface that abstracts infrastructure automation triggering and job status retrieval.
+### Provisioning Flow
 
 **Core Capabilities:**
-- Trigger provisioning/deprovisioning operations
+- Trigger provisioning/deprovisioning operations via AAP templates
 - Query job status for running operations
 - Track job lifecycle (creation → completion)
 - Return job identifiers for status polling
@@ -66,49 +55,9 @@ The provisioning system is built around a provider interface that abstracts infr
 
 Terminal states indicate completion. Non-terminal states require continued polling.
 
-**Benefits:**
-- Swap backends without code changes
-- Mock providers for testing
-- Support multiple operational models
-- Migrate providers without breaking deployments
-
 ![AAP Provisioning Component Diagram](images/AAP%20Direct%20Model%20-%20Component%20Diagram.png)
 
-### EDA Provider (Webhook)
-
-Legacy webhook-based provisioning using Event-Driven Ansible.
-
-**Flow:**
-1. Operator → Webhook → EDA service
-2. EDA → AAP job template
-3. AAP playbook provisions infrastructure
-4. Playbook adds finalizer to CR
-5. Playbook updates `reconciled-config-version` annotation
-6. Operator detects annotation → marks CR Ready
-
-**Characteristics:**
-- Fire-and-forget (no job IDs returned)
-- Passive feedback (playbook updates CR)
-- Playbook manages finalizers
-- Always returns `JobStateUnknown`
-- Completion via annotation watch
-
-**When to Use:**
-- Legacy EDA infrastructure exists
-- Simpler setup (no token management)
-- Backward compatibility required
-
-**Limitations:**
-- No job failure visibility
-- No progress updates
-- Can't cancel jobs
-- Orphaned resources possible
-
-![EDA Deletion Flow](images/EDA%20Model%20-%20Deletion%20During%20Provisioning.png)
-
-### AAP Direct Provider (REST API)
-
-Direct AAP REST API integration with full job lifecycle visibility.
+### AAP Integration (REST API)
 
 **Flow:**
 1. Operator → AAP API launch job
@@ -125,16 +74,9 @@ Direct AAP REST API integration with full job lifecycle visibility.
 - Operator-managed finalizers
 - Job cancellation supported
 
-**Advantages:**
-- Real-time job status
-- Full error tracebacks
-- Orphaned resource prevention
-- Crash recovery (persisted job IDs)
-- Progress tracking capability
-
 **Template Auto-Detection:**
 
-The provider automatically determines whether templates are `job_template` or `workflow_job_template` by querying AAP API. Results are cached in memory.
+The provider automatically determines whether templates are `job_template` or `workflow_job_template` by querying the AAP API. Results are cached in memory.
 
 ![AAP Direct Creation](images/AAP%20Direct%20Model%20-%20Creation%20and%20Provisioning.png)
 
@@ -152,9 +94,7 @@ Critical feature: Safely handle deletion while provisioning is in progress.
 4. Next reconciliation checks if provision terminal
 5. Once terminal, trigger deprovision
 
-**Asynchronous Deletion:** The deletion is non-blocking. Kubernetes sets `deletionTimestamp` immediately. The operator handles cleanup asynchronously through reconciliation loops, waiting for provision completion before triggering deprovision.
-
-This prevents parallel provision/deprovision execution which could leave infrastructure inconsistent.
+**Asynchronous Deletion:** Kubernetes sets `deletionTimestamp` immediately. The operator handles cleanup asynchronously through reconciliation loops, waiting for provision completion before triggering deprovision.
 
 ![AAP Direct Deletion](images/AAP%20Direct%20Model%20-%20Deletion%20During%20Provisioning.png)
 
@@ -163,23 +103,21 @@ This prevents parallel provision/deprovision execution which could leave infrast
 **Code Organization:**
 
 ```
-cloudkit-operator/
-├── internal/
-│   ├── provisioning/
-│   │   ├── provider.go           # Interface definitions
-│   │   ├── eda_provider.go       # EDA implementation
-│   │   └── aap_provider.go       # AAP Direct implementation
-│   ├── aap/
-│   │   ├── client.go             # AAP REST client
-│   │   └── types.go              # API types
-│   └── controller/
-│       └── computeinstance_controller.go
+osac-operator/
+├── pkg/provisioning/
+│   ├── provider.go           # Interface definitions
+│   └── aap_provider.go       # AAP implementation
+├── internal/aap/
+│   ├── client.go             # AAP REST client
+│   └── types.go              # API types
+└── internal/controller/
+    └── computeinstance_controller.go
 ```
 
 **Key Patterns:**
 
 **Preventing Parallel Operations:**
-- AAP Direct prevents provision and deprovision from running simultaneously
+- Operator prevents provision and deprovision from running simultaneously
 - Checks provision job state before deprovisioning
 - Cancels running provision before starting deprovision
 
@@ -203,66 +141,35 @@ cloudkit-operator/
 
 ## Configuration
 
-### Provider Selection
+### Required Settings
 
-Set via `OSAC_PROVISIONING_PROVIDER` environment variable.
+| Setting | Description |
+|---------|-------------|
+| `OSAC_AAP_URL` | AAP Controller API URL (with `/api/controller`) |
+| `OSAC_AAP_TOKEN` | Secret reference to AAP OAuth2 token |
+| `OSAC_AAP_TEMPLATE_PREFIX` | Prefix for AAP template names (e.g., `osac`) |
 
-**Values:**
-- `aap` - AAP Direct REST API provider (default)
-- `eda` - EDA webhook provider (legacy, requires explicit opt-in)
+### Optional Settings
 
-### Configuration Comparison
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `OSAC_AAP_STATUS_POLL_INTERVAL` | Job status poll interval | `30s` |
+| `OSAC_AAP_INSECURE_SKIP_VERIFY` | Skip TLS verification for AAP | `false` |
+| `OSAC_MAX_JOB_HISTORY` | Max job entries retained in CR status | `10` |
 
-| Setting | EDA Provider | AAP Direct Provider |
-|---------|-------------|---------------------|
-| **Required** | | |
-| `OSAC_PROVISIONING_PROVIDER` | `"eda"` (must set explicitly) | `"aap"` (default, optional) |
-| `OSAC_COMPUTE_INSTANCE_PROVISION_WEBHOOK` | URL to EDA create endpoint | N/A |
-| `OSAC_COMPUTE_INSTANCE_DEPROVISION_WEBHOOK` | URL to EDA delete endpoint | N/A |
-| `OSAC_AAP_URL` | N/A | AAP Controller API URL (with `/api/controller`) |
-| `OSAC_AAP_TOKEN` | N/A | Secret reference to AAP OAuth2 token |
-| `OSAC_AAP_PROVISION_TEMPLATE` | N/A | AAP template name for provision |
-| `OSAC_AAP_DEPROVISION_TEMPLATE` | N/A | AAP template name for deprovision |
-| **Optional** | | |
-| `OSAC_MINIMUM_REQUEST_INTERVAL` | Min time between webhook calls (e.g., `10m`) | N/A |
-| `OSAC_AAP_STATUS_POLL_INTERVAL` | N/A | Job status poll interval (default: `30s`) |
-
-### EDA Provider Example (Legacy)
+### Example Configuration
 
 ```yaml
 env:
-  - name: OSAC_PROVISIONING_PROVIDER
-    value: "eda"  # Must be set explicitly; AAP direct is the default
-  - name: OSAC_COMPUTE_INSTANCE_PROVISION_WEBHOOK
-    value: "http://innabox-eda-service:5000/create-compute-instance"
-  - name: OSAC_COMPUTE_INSTANCE_DEPROVISION_WEBHOOK
-    value: "http://innabox-eda-service:5000/delete-compute-instance"
-  - name: OSAC_MINIMUM_REQUEST_INTERVAL
-    value: "10m"
-```
-
-**Requirements:**
-- EDA service deployed and accessible
-- EDA webhooks configured
-- AAP playbooks handle finalizers
-- Playbooks update reconciled-config-version annotation
-
-### AAP Direct Provider Example
-
-```yaml
-env:
-  # OSAC_PROVISIONING_PROVIDER defaults to "aap", no need to set explicitly
   - name: OSAC_AAP_URL
     value: "https://aap.example.com/api/controller"
   - name: OSAC_AAP_TOKEN
     valueFrom:
       secretKeyRef:
-        name: aap-credentials
+        name: osac-aap-api-token
         key: token
-  - name: OSAC_AAP_PROVISION_TEMPLATE
-    value: "innabox-create-compute-instance"
-  - name: OSAC_AAP_DEPROVISION_TEMPLATE
-    value: "innabox-delete-compute-instance"
+  - name: OSAC_AAP_TEMPLATE_PREFIX
+    value: "osac"
   - name: OSAC_AAP_STATUS_POLL_INTERVAL
     value: "30s"
 ```
@@ -273,59 +180,32 @@ env:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: aap-credentials
-  namespace: cloudkit-system
+  name: osac-aap-api-token
+  namespace: osac-operator-system
 type: Opaque
 stringData:
   token: "your-aap-oauth2-token"
 ```
 
-**Token Creation:**
-
-Via AAP UI: Access → Users → [user] → Tokens → Add (Scope: Write)
-
-Via AAP API:
-```bash
-curl -X POST https://aap-url/api/v2/tokens/ \
-  -u username:password \
-  -H "Content-Type: application/json" \
-  -d '{
-    "description": "cloudkit-operator token",
-    "application": null,
-    "scope": "write"
-  }'
-```
-
-**Token Permissions:**
-- Launch configured templates
-- Query job status
-- Cancel jobs
-
 **Requirements:**
 - AAP Controller accessible from operator
-- OAuth2 token with permissions
-- Job/workflow templates configured
-- Templates accept EDA event format (compatibility)
+- OAuth2 token with launch and read permissions
+- Job/workflow templates configured with `OSAC_AAP_TEMPLATE_PREFIX`
+- Templates accept resource JSON in `ansible_eda.event.payload` format
 - Templates should NOT manage finalizers
 
 ### Configuration Notes
 
-**EDA:**
-- `OSAC_MINIMUM_REQUEST_INTERVAL` is client-side rate limiting, not polling
-- Prevents webhook flooding during reconciliation loops
-- WebhookClient caches recent requests and skips duplicates within interval
-
-**AAP Direct:**
 - URL must include `/api/controller` suffix
-- Template names auto-detected (job vs workflow)
-- Poll interval: 30s-60s recommended (balance responsiveness vs API load)
-- Templates can be job_template or workflow_job_template
+- Template names are resolved from prefix + resource type (e.g., `osac-create-compute-instance`)
+- Poll interval: 30s–60s recommended (balance responsiveness vs API load)
+- Templates can be `job_template` or `workflow_job_template`
 
 ## References
 
 ### Documentation
 
-- **[Operations Guide](operations.md)** - Deployment, migration, monitoring
+- **[Operations Guide](operations.md)** - Deployment and monitoring
 - **[Testing Guide](testing.md)** - Manual testing scenarios, unit tests, integration tests
 - **[Troubleshooting Guide](troubleshooting.md)** - Common issues, debugging commands, recovery procedures
 - [Main OSAC Architecture](../README.md) - Overall architecture
@@ -333,18 +213,12 @@ curl -X POST https://aap-url/api/v2/tokens/ \
 
 ### Code
 
-- [cloudkit-operator](https://github.com/innabox/cloudkit-operator) - Controller implementation
-- `internal/provisioning/` - Provider interface and implementations
+- [osac-operator](https://github.com/osac-project/osac-operator) - Controller implementation
+- `pkg/provisioning/` - Provider interface and AAP implementation
 - `internal/aap/` - AAP REST client
-- `internal/controller/computeinstance_controller.go` - Controller integration
 
 ### External
 
 - [AAP API Documentation](https://docs.ansible.com/automation-controller/latest/html/controllerapi/index.html)
 - [AAP Job Launch API](https://docs.ansible.com/automation-controller/latest/html/controllerapi/api_ref.html#/Jobs)
 - [AAP Authentication](https://docs.ansible.com/automation-controller/latest/html/userguide/applications_auth.html)
-- [Event-Driven Ansible](https://www.ansible.com/products/event-driven-ansible)
-
----
-
-**Note:** This documentation describes cloudkit-operator. The operator will be renamed to osac-operator as part of OSAC project consolidation.

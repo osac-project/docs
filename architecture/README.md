@@ -67,7 +67,7 @@ Management Clusters include the following software:
 
 * [Red Hat Advanced Cluster Management](https://www.redhat.com/en/technologies/management/advanced-cluster-management): provision and manage clusters, especially using Hosted Control Planes.
 * [OpenShift Virtualization](https://www.redhat.com/en/technologies/cloud-computing/openshift/virtualization): provision and manage VMs.
-* [Ansible Automation Platform](https://www.redhat.com/en/technologies/management/ansible): Event Driven Ansible (EDA) to execute provisioning and management workflows.
+* [Ansible Automation Platform](https://www.redhat.com/en/technologies/management/ansible): executes provisioning and management workflows via job templates.
 
 ## Fulfillment
 
@@ -103,8 +103,8 @@ integrate their own UIs with this API.
 ### O-SAC Controller
 
 O-SAC Controller is a Kubernetes operator running on each Management Cluster
-that watches for requests and then ensures they get fulfilled by using a
-combination of direct automation and delegation to Event Driven Ansible.
+that watches for requests and then ensures they get fulfilled by launching
+Ansible Automation Platform job templates and monitoring their progress.
 
 While the controller has APIs that may appear to duplicate other existing APIs
 in the OpenShift ecosystem, this controller offers a much narrower scope of
@@ -124,10 +124,8 @@ automation workflows as needed to maintain desired state.
 ### Ansible Automation Platform (AAP)
 
 AAP executes the majority of provisioning steps by running the associated
-Templates. [Event Driven Ansible
-(EDA)](https://github.com/ansible/event-driven-ansible) is used to launch
-Ansible in response to events, primarily by triggering EDA from the O-SAC
-Controller.
+Templates. The O-SAC Controller launches templates through the AAP REST API
+and polls job status until provisioning completes or fails.
 
 Ansible roles and playbooks are expected to be idempotent, which is a good match
 for the declarative nature of the project's k8s controllers. The roles that
@@ -136,11 +134,8 @@ same resulting state. That is a standard best practice for any Ansible
 automation content, and in this project it enables the controllers to safely run
 their automated workflows with Ansible as needed.
 
-The O-SAC Controller supports multiple provisioning backends through a provider
-abstraction layer. This enables flexible integration with AAP through either
-Event-Driven Ansible (EDA) webhooks or direct AAP REST API calls. See [AAP
-Provisioning Architecture](aap-provisioning/) for details on the provider
-abstraction, job lifecycle management, and configuration options.
+See [AAP Provisioning Architecture](aap-provisioning/) for details on job
+lifecycle management and configuration options.
 
 ### Workflow
 
@@ -148,8 +143,8 @@ The general workflow for fulfillment is as follows:
 
 * First, the cloud provider makes a request for resources through the API, on behalf of a tenant user, having received that request through their own user interface. Alternatively the cloud provider might expose the fulfillment API directly to end users.
 * The Fulfillment Service selects a Management Cluster and then places the request there with the Kubernetes O-SAC operator using Kubernetes APIs.
-* The O-SAC operator then performs automated setup and triggers the third component: Ansible playbooks via Event-Driven Ansible (EDA). It then reports status back to the Fulfillment Service.
-* Once the EDA webhook is triggered, AAP runs to manage the deployment. The exact automation varies and can be customized by each cloud provider’s needs.
+* The O-SAC operator then performs automated setup and launches AAP job templates to provision infrastructure. It polls job status and reports progress back to the Fulfillment Service.
+* AAP runs the deployment automation. The exact automation varies and can be customized by each cloud provider's needs.
 
 The Fulfillment Service is intentionally modeled on the Kubernetes pattern:
 providers submit a request that declares the desired state, and the O-SAC
