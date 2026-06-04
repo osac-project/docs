@@ -21,7 +21,7 @@ for cluster provisioning:
 
 1. A cluster request is submitted to the Fulfillment Service API
 2. The Fulfillment Service schedules the request to a Management Cluster
-3. The OSAC Controller on the Management Cluster processes the request and triggers Event Driven Ansible
+3. The OSAC Controller on the Management Cluster processes the request and launches AAP job templates
 4. Ansible Automation Platform executes the cluster provisioning workflow using template-based automation
 5. Status is continuously synchronized back through the controller to the Fulfillment Service
 
