@@ -55,7 +55,7 @@ The OSAC operator provisions infrastructure by launching AAP job or workflow tem
 
 ```bash
 # Check AAP connectivity from operator pod
-AAP_URL="https://aap.example.com/api/v2"
+AAP_URL="https://aap.example.com/api/controller"
 AAP_TOKEN="your-token"
 
 kubectl run -it --rm test-aap --image=curlimages/curl --restart=Never -- \
@@ -144,7 +144,8 @@ kubectl get computeinstance <name> -o json | jq '.status.jobs // [] | map(select
 ### Key Log Messages
 
 **Provision Flow:**
-```
+
+```text
 "triggering provisioning"
 "provision job triggered"
 "provision job still running"
@@ -153,7 +154,8 @@ kubectl get computeinstance <name> -o json | jq '.status.jobs // [] | map(select
 ```
 
 **Deprovision Flow:**
-```
+
+```text
 "checking provision job before deprovision"
 "provision job is running, attempting to cancel"
 "canceled provision job"

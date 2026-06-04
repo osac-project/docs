@@ -102,7 +102,7 @@ kubectl get computeinstance test-ci-cancel -o json | jq -r '.status.jobs // [] |
 # Expected: AAP job ID (e.g., "9104")
 
 # 5. Check operator logs for cancellation
-kubectl logs -n cloudkit-system deployment/cloudkit-operator-controller-manager | grep "cancel"
+kubectl logs -n osac-operator-system deployment/osac-operator-controller-manager | grep "cancel"
 # Expected: "provision job is running, attempting to cancel"
 #           "canceled provision job"
 
@@ -180,21 +180,21 @@ Unit tests validate individual components in isolation.
 **Test Files:**
 - `osac-operator/pkg/provisioning/provider_test.go` - Interface contract tests
 - `osac-operator/pkg/provisioning/aap_provider_test.go` - AAP provider tests
-- `osac-operator/internal/aap/client_test.go` - AAP client tests
+- `osac-operator/pkg/aap/client_test.go` - AAP client tests
 
 **Running Unit Tests:**
 
 ```bash
-cd /path/to/cloudkit-operator
+cd /path/to/osac-operator
 
 # Run all tests
 make test
 
 # Run specific package tests
-go test ./internal/provisioning/... -v
+go test ./pkg/provisioning/... ./pkg/aap/... -v
 
 # Run tests with coverage
-go test ./internal/provisioning/... -cover -coverprofile=coverage.out
+go test ./pkg/provisioning/... ./pkg/aap/... -cover -coverprofile=coverage.out
 
 # View coverage report
 go tool cover -html=coverage.out
@@ -213,12 +213,12 @@ go tool cover -html=coverage.out
 Integration tests validate end-to-end workflows with fake Kubernetes clients and mock AAP clients.
 
 **Test Files:**
-- `cloudkit-operator/internal/controller/computeinstance_integration_test.go`
+- `osac-operator/internal/controller/computeinstance_integration_test.go`
 
 **Running Integration Tests:**
 
 ```bash
-cd /path/to/cloudkit-operator
+cd /path/to/osac-operator
 
 # Run integration tests
 go test ./internal/controller/... -v -tags=integration
