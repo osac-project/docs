@@ -55,19 +55,20 @@ The OSAC operator provisions infrastructure by launching AAP job or workflow tem
 
 ```bash
 # Check AAP connectivity from operator pod
-AAP_URL="https://aap.example.com/api/controller"
+# OSAC_AAP_URL matches operator config; the client appends /v2/ to API paths
+OSAC_AAP_URL="https://aap.example.com/api/controller"
 AAP_TOKEN="your-token"
 
 kubectl run -it --rm test-aap --image=curlimages/curl --restart=Never -- \
   curl -H "Authorization: Bearer $AAP_TOKEN" \
-  $AAP_URL/ping/
+  "${OSAC_AAP_URL}/v2/ping/"
 
 # Verify templates exist in AAP
 curl -H "Authorization: Bearer $AAP_TOKEN" \
-  "$AAP_URL/job_templates/" | jq '.results[] | {name, id}'
+  "${OSAC_AAP_URL}/v2/job_templates/" | jq '.results[] | {name, id}'
 
 curl -H "Authorization: Bearer $AAP_TOKEN" \
-  "$AAP_URL/workflow_job_templates/" | jq '.results[] | {name, id}'
+  "${OSAC_AAP_URL}/v2/workflow_job_templates/" | jq '.results[] | {name, id}'
 
 # Create test ComputeInstance
 cat <<EOF | kubectl apply -f -
@@ -89,7 +90,7 @@ kubectl get computeinstance test-ci-aap -o json | jq '.status.jobs // [] | map(s
 # Check AAP job directly
 AAP_JOB_ID=$(kubectl get computeinstance test-ci-aap -o json | jq -r '.status.jobs // [] | map(select(.type == "provision")) | sort_by(.timestamp) | reverse | first | .jobID')
 curl -H "Authorization: Bearer $AAP_TOKEN" \
-  "$AAP_URL/jobs/$AAP_JOB_ID/" | jq '.status, .failed, .finished'
+  "${OSAC_AAP_URL}/v2/jobs/$AAP_JOB_ID/" | jq '.status, .failed, .finished'
 
 # Check operator logs for AAP API calls
 kubectl logs -n osac-operator-system deployment/osac-operator-controller-manager -f | grep "AAP"
