@@ -32,22 +32,22 @@ for cluster provisioning:
 The Fulfillment Service provides gRPC and REST APIs for managing cluster
 lifecycle operations:
 
-**API Operations** (`fulfillment-service/proto/private/v1/clusters_service.proto`):
+**Private API Operations** (`fulfillment-service/proto/private/osac/private/v1/clusters_service.proto`):
 - `Create`: Request a new cluster deployment
 - `Get`: Retrieve cluster details and status
 - `List`: List all clusters for a tenant
 - `Update`: Modify cluster configuration
 - `Delete`: Request cluster deletion
+- `Signal`: Indicate that something changed and may require reconciliation (gRPC only, no HTTP endpoint)
 
-**Cluster Request Model** (`fulfillment-service/proto/private/v1/cluster_type.proto`):
+**Cluster Request Model** (`fulfillment-service/proto/private/osac/private/v1/cluster_type.proto`):
 
 A cluster request includes:
 - `template`: The cluster template ID (e.g., "ocp_4_17_small")
 - `template_parameters`: A map of parameters specific to the selected template
-- `node_sets`: Specifications for worker node groups, each containing:
-  - `host_class`: The resource class for nodes (determines hardware characteristics)
+- `node_sets`: A map of worker node groups, keyed by node set identifier, each containing:
+  - `host_type`: The type of hosts in the set (determines hardware characteristics)
   - `size`: Number of nodes in the node set
-  - `name`: Identifier for the node set
 
 **Cluster Status**:
 
@@ -82,9 +82,9 @@ OSAC Controller running on the Management Cluster.
 
 The OSAC Controller is a Kubernetes controller running on each Management
 Cluster that reconciles ClusterOrder resources
-(`cloudkit-controller/internal/controller/clusterorder_controller.go`).
+(`osac-operator/internal/controller/clusterorder_controller.go`).
 
-**ClusterOrder Custom Resource** (`cloudkit-controller/api/v1alpha1/clusterorder_types.go`):
+**ClusterOrder Custom Resource** (`osac-operator/api/v1alpha1/clusterorder_types.go`):
 
 The ClusterOrder CRD defines:
 - `TemplateID`: Identifies which cluster template to use
@@ -132,7 +132,7 @@ Templates are named with the configured prefix (for example, `osac-create-hosted
 
 When launched, AAP runs the appropriate workflow template for cluster creation or deletion.
 
-**Cluster Creation Playbook** (`osac-aap/playbook_cloudkit_create_hosted_cluster.yml`):
+**Cluster Creation Playbook** (`osac-aap/playbook_osac_create_hosted_cluster.yml`):
 
 The main cluster creation workflow consists of these phases:
 
@@ -144,7 +144,7 @@ The main cluster creation workflow consists of these phases:
 
 2. **Template Execution**:
    - Dynamically includes the selected cluster template's `install` tasks
-   - Templates are Ansible roles located at a file path specified in the `CLOUDKIT_TEMPLATE_COLLECTIONS` environment variable
+   - Templates are Ansible roles located at a file path specified in the `osac_template_collections` variable
    - Each template provides a standardized interface while allowing customization of the underlying implementation
 
 3. **Cluster Infrastructure Creation**:
@@ -204,7 +204,7 @@ The cluster provisioning workflow integrates with several infrastructure compone
 
 **Networking**:
 - Each cluster is deployed on an isolated Layer 2 network
-- Ingress is configured on the tenant cluster worker nodes using MetalLB (`cloudkit.service.metallb_ingress` role)
+- Ingress is configured on the tenant cluster worker nodes using MetalLB (`osac.service.metallb_ingress` role)
 - External access is configured to expose the API and console endpoints
 - Worker nodes are connected to the appropriate networks based on template configuration
 
