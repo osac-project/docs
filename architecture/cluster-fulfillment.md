@@ -177,6 +177,48 @@ CSPs can create custom templates to offer differentiated cluster configurations,
 - Specialized hardware configurations
 - Compliance-specific settings
 
+## Cluster Catalog Items
+
+Cluster catalog items are the primary user-facing abstraction for ordering
+clusters. A catalog item wraps an underlying cluster template with additional
+controls that determine what end users see and can configure.
+
+**Definition** (`fulfillment-service/proto/private/osac/private/v1/cluster_catalog_item_type.proto`):
+
+A cluster catalog item includes:
+- `title`: Human-friendly short description suitable for display in a UI or CLI
+- `description`: Longer description in Markdown format
+- `template`: Reference to the underlying cluster template ID
+- `published`: Whether this item is visible in the public API (only published items appear in public List/Get responses)
+- `tenant`: Tenant scope (empty string = global, visible to all tenants; non-empty = scoped to a specific tenant). The `tenant` field is only available in the private API
+- `field_definitions`: Controls for individual fields on the cluster spec
+
+**Field Definitions** (`fulfillment-service/proto/public/osac/public/v1/field_definition_type.proto`):
+
+Each field definition controls a specific field on the cluster resource spec:
+- `path`: Dot-notation path referencing a spec field (e.g., `spec.network.pod_cidr`, `spec.node_sets.workers.size`)
+- `display_name`: Human-friendly label for UI display
+- `editable`: Whether the user is allowed to set this field
+- `default`: Default value for the field
+- `validation_schema`: Optional JSON Schema (draft 2020-12) for validating user-provided values
+
+**APIs:**
+
+Catalog items are managed through both private and public APIs:
+- **Private API** (`fulfillment-service/proto/private/osac/private/v1/cluster_catalog_items_service.proto`): Full CRUD operations for admins, including tenant scoping and publication controls
+- **Public API** (`fulfillment-service/proto/public/osac/public/v1/cluster_catalog_items_service.proto`): Read-only access for end users (List, Get) filtered to published items
+
+**Relationship to Templates:**
+
+Cluster templates define the infrastructure provisioning logic (Ansible roles,
+parameters, node configurations). Catalog items sit above templates in the
+abstraction layer: they reference a template and add field-level access
+controls, defaults, and validation that shape the end-user experience. Multiple
+catalog items can reference the same underlying template with different field
+configurations - for example, one catalog item might expose all parameters for
+advanced users while another locks most fields to sensible defaults for
+simplified ordering.
+
 ## Worker Node Provisioning
 
 Worker nodes for hosted clusters can be provisioned in multiple ways depending
