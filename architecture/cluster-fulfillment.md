@@ -49,14 +49,28 @@ A cluster request includes:
   - `host_type`: The type of hosts in the set (determines hardware characteristics)
   - `size`: Number of nodes in the node set
 
+**Public API Operations** (`fulfillment-service/proto/public/osac/public/v1/clusters_service.proto`):
+
+The public API exposes tenant-facing operations at `/api/fulfillment/v1/clusters`:
+- `List`: List clusters visible to the current tenant
+- `Get`: Retrieve cluster details and status
+- `Create`: Create a new cluster
+- `Update`: Modify cluster configuration (partial updates via `FieldMask`)
+- `Delete`: Delete a cluster
+- `GetKubeconfig` / `GetKubeconfigViaHttp`: Retrieve the admin kubeconfig for a provisioned cluster (gRPC returns a string field; HTTP variant at `/api/fulfillment/v1/clusters/{id}/kubeconfig` returns YAML directly with `application/yaml` content type)
+- `GetPassword` / `GetPasswordViaHttp`: Retrieve the admin password for a provisioned cluster (gRPC returns a string field; HTTP variant at `/api/fulfillment/v1/clusters/{id}/password` returns plain text)
+
+The public API uses CEL-based filtering for List operations and supports optimistic locking on Update via the `lock` field.
+
 **Cluster Status**:
 
 The cluster status provides real-time information about the deployment:
-- `state`: Overall cluster state (PROGRESSING, READY, FAILED, DEGRADED)
-- `conditions`: Detailed conditions tracking specific aspects of the cluster
+- `state`: Overall cluster state (PROGRESSING, READY, FAILED)
+- `conditions`: Detailed conditions tracking specific aspects of the cluster (PROGRESSING, READY, FAILED, DEGRADED)
 - `api_url`: Kubernetes API endpoint for the provisioned cluster
 - `console_url`: OpenShift web console URL
-- `hub`: The Management Cluster ID where the cluster is hosted
+- `node_sets`: Current status of node sets (may differ from spec when changes are in progress)
+- `hub`: The Management Cluster ID where the cluster is hosted (private API only)
 
 ### Management Cluster Scheduling
 
