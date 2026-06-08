@@ -240,11 +240,17 @@ Cluster status flows through multiple levels:
    - Includes API and console URLs when ready
    - Maintains conditions visible through the API
 
-**Key Status Conditions**:
-- `ClusterAvailable`: Control plane is operational
-- `NodesReady`: Worker nodes have joined and are ready
-- `InfrastructureReady`: Supporting infrastructure (networking, storage) is configured
-- `TemplateApplied`: Template-specific configuration has been applied
+**ClusterOrder Conditions** (Kubernetes CRD):
+- `Accepted`: The order has been accepted but work has not yet started
+- `Progressing`: An update is in progress
+- `ControlPlaneAvailable`: The cluster control plane is ready
+- `Available`: The cluster is available
+
+**Fulfillment Service Condition Types** (gRPC/REST API):
+- `PROGRESSING`: The cluster is not completely ready yet
+- `READY`: The cluster is ready to use
+- `FAILED`: The cluster is unusable
+- `DEGRADED`: The cluster is degraded (e.g., unable to allocate requested nodes)
 
 ## Cluster Deletion
 
