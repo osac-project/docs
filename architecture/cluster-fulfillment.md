@@ -100,10 +100,21 @@ Cluster that reconciles ClusterOrder resources
 
 **ClusterOrder Custom Resource** (`osac-operator/api/v1alpha1/clusterorder_types.go`):
 
-The ClusterOrder CRD defines:
-- `TemplateID`: Identifies which cluster template to use
-- `TemplateParameters`: JSON-encoded map of template-specific parameters
-- `NodeRequests`: Array of node request objects specifying resource class and quantity
+The ClusterOrder CRD spec defines:
+- `templateID`: Identifies which cluster template to use
+- `templateParameters`: JSON-encoded string of template-specific parameters
+- `nodeRequests`: Array of node request objects, each with `resourceClass` (host type) and `numberOfNodes` (count)
+- `pullSecret`: Credentials for container image repositories (optional, defaults to provider's)
+- `sshPublicKey`: SSH public key installed on worker nodes (optional, defaults to provider's)
+- `releaseImage`: OCP release image URL controlling the OpenShift version (optional, defaults to template's)
+- `network`: Cluster networking configuration with `podCIDR` and `serviceCIDR` (optional)
+
+The ClusterOrder CRD status tracks:
+- `phase`: Overall state (Progressing, Failed, Ready, Deleting)
+- `conditions`: Detailed conditions (Accepted, Progressing, ControlPlaneAvailable, Available)
+- `clusterReference`: References to the created namespace, HostedCluster, ServiceAccount, and RoleBinding
+- `jobs`: Chronological history of provision and deprovision operations with job state, timestamps, and error details
+- `desiredConfigVersion`: Hash of the current spec used to detect changes that require re-provisioning
 
 **Reconciliation Loop**:
 
