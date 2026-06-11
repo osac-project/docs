@@ -92,14 +92,12 @@ See [personas.md](personas.md) for a description of OSAC personas.
 
 ## Contribution Guide
 
-The "(AI [Factory]|Cloud) Inna Box" [organization on
-GitHub](https://github.com/innabox) is a public location to plan and develop
-this solution. It contains a [list of
-issues](https://github.com/innabox/issues/issues) driving our work as well as
-this document and [additional documentation](https://github.com/innabox/docs). 
+The Open Sovereign AI Cloud [organization on
+GitHub](https://github.com/osac-project) is a public location to plan and develop
+this solution.  Major features, arhcitectural changes, and significant initiatives are proposed and discussed in the [enhancement-proposals](https://github.com/osac-project/enhancement-proposals) repository.  GitHub [issues](https://github.com/osac-project/issues/issues) are also used to track community-reported bugs, feature requests, and other project discussions.
 
 To contribute to the project, first find or open an issue on
-https://github.com/innabox/issues. Prior to beginning work, it is wise to get
+https://github.com/osac-project/issues. Prior to beginning work, it is wise to get
 feedback from project stakeholders on the change and how it will be implemented.
 Then fork the repository you’re interested in contributing to, clone it to your
 local machine, and create a descriptive feature branch name. Once you’ve made
@@ -109,4 +107,4 @@ summarizing what you changed. Then your pull request will eventually be
 reviewed, and you can respond to comments, add follow-up commits, and re-run
 tests until all required checks are green. If the team accepts the pull request,
 your contribution will be merged and you will have successfully contributed to
-the O-SAC project.
+the OSAC project.
