@@ -94,7 +94,7 @@ See [personas.md](personas.md) for a description of OSAC personas.
 
 The Open Sovereign AI Cloud [organization on
 GitHub](https://github.com/osac-project) is a public location to plan and develop
-this solution.  Major features, arhcitectural changes, and significant initiatives are proposed and discussed in the [enhancement-proposals](https://github.com/osac-project/enhancement-proposals) repository.  GitHub [issues](https://github.com/osac-project/issues/issues) are also used to track community-reported bugs, feature requests, and other project discussions.
+this solution.  Major features, architectural changes, and significant initiatives are proposed and discussed in the [enhancement-proposals](https://github.com/osac-project/enhancement-proposals) repository.  GitHub [issues](https://github.com/osac-project/issues/issues) are also used to track community-reported bugs, feature requests, and other project discussions.
 
 To contribute to the project, first find or open an issue on
 https://github.com/osac-project/issues. Prior to beginning work, it is wise to get
