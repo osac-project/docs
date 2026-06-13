@@ -32,31 +32,45 @@ for cluster provisioning:
 The Fulfillment Service provides gRPC and REST APIs for managing cluster
 lifecycle operations:
 
-**API Operations** (`fulfillment-service/proto/private/v1/clusters_service.proto`):
+**Private API Operations** (`fulfillment-service/proto/private/osac/private/v1/clusters_service.proto`):
 - `Create`: Request a new cluster deployment
 - `Get`: Retrieve cluster details and status
 - `List`: List all clusters for a tenant
 - `Update`: Modify cluster configuration
 - `Delete`: Request cluster deletion
+- `Signal`: Indicate that something changed and may require reconciliation (gRPC only, no HTTP endpoint)
 
-**Cluster Request Model** (`fulfillment-service/proto/private/v1/cluster_type.proto`):
+**Cluster Request Model** (`fulfillment-service/proto/private/osac/private/v1/cluster_type.proto`):
 
 A cluster request includes:
 - `template`: The cluster template ID (e.g., "ocp_4_17_small")
 - `template_parameters`: A map of parameters specific to the selected template
-- `node_sets`: Specifications for worker node groups, each containing:
-  - `host_class`: The resource class for nodes (determines hardware characteristics)
+- `node_sets`: A map of worker node groups, keyed by node set identifier, each containing:
+  - `host_type`: The type of hosts in the set (determines hardware characteristics)
   - `size`: Number of nodes in the node set
-  - `name`: Identifier for the node set
+
+**Public API Operations** (`fulfillment-service/proto/public/osac/public/v1/clusters_service.proto`):
+
+The public API exposes tenant-facing operations at `/api/fulfillment/v1/clusters`:
+- `List`: List clusters visible to the current tenant
+- `Get`: Retrieve cluster details and status
+- `Create`: Create a new cluster
+- `Update`: Modify cluster configuration (partial updates via `FieldMask`)
+- `Delete`: Delete a cluster
+- `GetKubeconfig` / `GetKubeconfigViaHttp`: Retrieve the admin kubeconfig for a provisioned cluster (gRPC returns a string field; HTTP variant at `/api/fulfillment/v1/clusters/{id}/kubeconfig` returns YAML directly with `application/yaml` content type)
+- `GetPassword` / `GetPasswordViaHttp`: Retrieve the admin password for a provisioned cluster (gRPC returns a string field; HTTP variant at `/api/fulfillment/v1/clusters/{id}/password` returns plain text)
+
+The public API uses CEL-based filtering for List operations and supports optimistic locking on Update via the `lock` field.
 
 **Cluster Status**:
 
 The cluster status provides real-time information about the deployment:
-- `state`: Overall cluster state (PROGRESSING, READY, FAILED, DEGRADED)
-- `conditions`: Detailed conditions tracking specific aspects of the cluster
+- `state`: Overall cluster state (PROGRESSING, READY, FAILED)
+- `conditions`: Detailed conditions tracking specific aspects of the cluster (PROGRESSING, READY, FAILED, DEGRADED)
 - `api_url`: Kubernetes API endpoint for the provisioned cluster
 - `console_url`: OpenShift web console URL
-- `hub`: The Management Cluster ID where the cluster is hosted
+- `node_sets`: Current status of node sets (may differ from spec when changes are in progress)
+- `hub`: The Management Cluster ID where the cluster is hosted (private API only)
 
 ### Management Cluster Scheduling
 
@@ -82,14 +96,25 @@ OSAC Controller running on the Management Cluster.
 
 The OSAC Controller is a Kubernetes controller running on each Management
 Cluster that reconciles ClusterOrder resources
-(`cloudkit-controller/internal/controller/clusterorder_controller.go`).
+(`osac-operator/internal/controller/clusterorder_controller.go`).
 
-**ClusterOrder Custom Resource** (`cloudkit-controller/api/v1alpha1/clusterorder_types.go`):
+**ClusterOrder Custom Resource** (`osac-operator/api/v1alpha1/clusterorder_types.go`):
 
-The ClusterOrder CRD defines:
-- `TemplateID`: Identifies which cluster template to use
-- `TemplateParameters`: JSON-encoded map of template-specific parameters
-- `NodeRequests`: Array of node request objects specifying resource class and quantity
+The ClusterOrder CRD spec defines:
+- `templateID`: Identifies which cluster template to use
+- `templateParameters`: JSON-encoded string of template-specific parameters
+- `nodeRequests`: Array of node request objects, each with `resourceClass` (host type) and `numberOfNodes` (count)
+- `pullSecret`: Credentials for container image repositories (optional, defaults to provider's)
+- `sshPublicKey`: SSH public key installed on worker nodes (optional, defaults to provider's)
+- `releaseImage`: OCP release image URL controlling the OpenShift version (optional, defaults to template's)
+- `network`: Cluster networking configuration with `podCIDR` and `serviceCIDR` (optional)
+
+The ClusterOrder CRD status tracks:
+- `phase`: Overall state (Progressing, Failed, Ready, Deleting)
+- `conditions`: Detailed conditions (Accepted, Progressing, ControlPlaneAvailable, Available)
+- `clusterReference`: References to the created namespace, HostedCluster, ServiceAccount, and RoleBinding
+- `jobs`: Chronological history of provision and deprovision operations with job state, timestamps, and error details
+- `desiredConfigVersion`: Hash of the current spec used to detect changes that require re-provisioning
 
 **Reconciliation Loop**:
 
@@ -132,7 +157,7 @@ Templates are named with the configured prefix (for example, `osac-create-hosted
 
 When launched, AAP runs the appropriate workflow template for cluster creation or deletion.
 
-**Cluster Creation Playbook** (`osac-aap/playbook_cloudkit_create_hosted_cluster.yml`):
+**Cluster Creation Playbook** (`osac-aap/playbook_osac_create_hosted_cluster.yml`):
 
 The main cluster creation workflow consists of these phases:
 
@@ -144,7 +169,7 @@ The main cluster creation workflow consists of these phases:
 
 2. **Template Execution**:
    - Dynamically includes the selected cluster template's `install` tasks
-   - Templates are Ansible roles located at a file path specified in the `CLOUDKIT_TEMPLATE_COLLECTIONS` environment variable
+   - Templates are Ansible roles located at a file path specified in the `osac_template_collections` variable
    - Each template provides a standardized interface while allowing customization of the underlying implementation
 
 3. **Cluster Infrastructure Creation**:
@@ -177,6 +202,48 @@ CSPs can create custom templates to offer differentiated cluster configurations,
 - Specialized hardware configurations
 - Compliance-specific settings
 
+## Cluster Catalog Items
+
+Cluster catalog items are the primary user-facing abstraction for ordering
+clusters. A catalog item wraps an underlying cluster template with additional
+controls that determine what end users see and can configure.
+
+**Definition** (`fulfillment-service/proto/private/osac/private/v1/cluster_catalog_item_type.proto`):
+
+A cluster catalog item includes:
+- `title`: Human-friendly short description suitable for display in a UI or CLI
+- `description`: Longer description in Markdown format
+- `template`: Reference to the underlying cluster template ID
+- `published`: Whether this item is visible in the public API (only published items appear in public List/Get responses)
+- `tenant`: Tenant scope (empty string = global, visible to all tenants; non-empty = scoped to a specific tenant). The `tenant` field is only available in the private API
+- `field_definitions`: Controls for individual fields on the cluster spec
+
+**Field Definitions** (`fulfillment-service/proto/public/osac/public/v1/field_definition_type.proto`):
+
+Each field definition controls a specific field on the cluster resource spec:
+- `path`: Dot-notation path referencing a spec field (e.g., `spec.network.pod_cidr`, `spec.node_sets.workers.size`)
+- `display_name`: Human-friendly label for UI display
+- `editable`: Whether the user is allowed to set this field
+- `default`: Default value for the field
+- `validation_schema`: Optional JSON Schema (draft 2020-12) for validating user-provided values
+
+**APIs:**
+
+Catalog items are managed through both private and public APIs:
+- **Private API** (`fulfillment-service/proto/private/osac/private/v1/cluster_catalog_items_service.proto`): Full CRUD operations for admins, including tenant scoping and publication controls
+- **Public API** (`fulfillment-service/proto/public/osac/public/v1/cluster_catalog_items_service.proto`): Read-only access for end users (List, Get) filtered to published items
+
+**Relationship to Templates:**
+
+Cluster templates define the infrastructure provisioning logic (Ansible roles,
+parameters, node configurations). Catalog items sit above templates in the
+abstraction layer: they reference a template and add field-level access
+controls, defaults, and validation that shape the end-user experience. Multiple
+catalog items can reference the same underlying template with different field
+configurations - for example, one catalog item might expose all parameters for
+advanced users while another locks most fields to sensible defaults for
+simplified ordering.
+
 ## Worker Node Provisioning
 
 Worker nodes for hosted clusters can be provisioned in multiple ways depending
@@ -204,7 +271,7 @@ The cluster provisioning workflow integrates with several infrastructure compone
 
 **Networking**:
 - Each cluster is deployed on an isolated Layer 2 network
-- Ingress is configured on the tenant cluster worker nodes using MetalLB (`cloudkit.service.metallb_ingress` role)
+- Ingress is configured on the tenant cluster worker nodes using MetalLB (`osac.service.metallb_ingress` role)
 - External access is configured to expose the API and console endpoints
 - Worker nodes are connected to the appropriate networks based on template configuration
 
@@ -240,11 +307,17 @@ Cluster status flows through multiple levels:
    - Includes API and console URLs when ready
    - Maintains conditions visible through the API
 
-**Key Status Conditions**:
-- `ClusterAvailable`: Control plane is operational
-- `NodesReady`: Worker nodes have joined and are ready
-- `InfrastructureReady`: Supporting infrastructure (networking, storage) is configured
-- `TemplateApplied`: Template-specific configuration has been applied
+**ClusterOrder Conditions** (Kubernetes CRD):
+- `Accepted`: The order has been accepted but work has not yet started
+- `Progressing`: An update is in progress
+- `ControlPlaneAvailable`: The cluster control plane is ready
+- `Available`: The cluster is available
+
+**Fulfillment Service Condition Types** (gRPC/REST API):
+- `PROGRESSING`: The cluster is not completely ready yet
+- `READY`: The cluster is ready to use
+- `FAILED`: The cluster is unusable
+- `DEGRADED`: The cluster is degraded (e.g., unable to allocate requested nodes)
 
 ## Cluster Deletion
 
