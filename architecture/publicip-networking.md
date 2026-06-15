@@ -275,70 +275,38 @@ The attach/detach mechanism uses a "service swap" pattern:
 The PublicIP workflow involves several OSAC components working together:
 
 ```
-  +------------------+     gRPC/REST     +---------------------+
-  |  osac CLI        | ----------------> | fulfillment-service |
-  |  (tenant/admin)  |                   |   gRPC server       |
-  +------------------+                   |   REST gateway      |
-                                         |   PostgreSQL        |
-                                         +----------+----------+
-                                                    |
-                                           stream events
-                                                    |
-                                                    v
-                                         +---------------------+
-                                         | fulfillment-        |
-                                         | controller          |
-                                         |   (reconciler)      |
-                                         +----------+----------+
-                                                    |
-                                           creates K8s CRs
-                                                    |
-                                                    v
-                                         +---------------------+
-                                         | osac-operator       |
-                                         |   (controller-      |
-                                         |    runtime)          |
-                                         +----------+----------+
-                                                    |
-                                           launches AAP jobs
-                                                    |
-                                                    v
-                                         +---------------------+
-                                         | AAP (Ansible)       |
-                                         |                     |
-                                         |  Pool provisioning: |
-                                         |   allocate-public-ip|
-                                         |                     |
-                                         |  IP attachment:     |
-                                         |   attach-public-ip  |
-                                         |   detach-public-ip  |
-                                         |                     |
-                                         |  IP release:        |
-                                         |   deallocate-       |
-                                         |     public-ip       |
-                                         +----------+----------+
-                                                    |
-                                           configures MetalLB
-                                           Services + IPPools
-                                                    |
-                                                    v
-                                         +---------------------+
-                                         | MetalLB (L2 mode)   |
-                                         |   IPAddressPool     |
-                                         |   L2Advertisement   |
-                                         |   Speaker (ARP)     |
-                                         +---------------------+
+                          Forward path (provisioning)
+                    ─────────────────────────────────────>
+
+  +-----------+    +-------------+    +--------------+    +--------------+    +--------+
+  |  osac CLI |    | fulfillment |    | fulfillment- |    | osac-operator|    |  AAP   |
+  |           |--->| -service    |--->| controller   |--->| (controller- |--->|        |
+  | tenant or |    |             |    |              |    |  runtime)    |    | Ansible|
+  | admin     |    | gRPC/REST   |    | reconciles   |    | watches CRs, |    | roles  |
+  |           |    | PostgreSQL  |    | API objects  |    | launches AAP |    |        |
+  +-----------+    +------+------+    | to K8s CRs   |    | jobs         |    +---+----+
+                          ^           +--------------+    +--------------+        |
+                          |                                                      |
+                   gRPC Signal                                          configures MetalLB
+                   (status updates)                                     Services + IPPools
+                          |                                                      |
+                   +------+-------+                                     +--------+--------+
+                   | feedback-    |       watches CR status              | MetalLB         |
+                   | controller  |<─────────────────────────────────────| (L2 mode)       |
+                   |             |       on workload cluster             | IPAddressPool   |
+                   +-------------+                                      | L2Advertisement |
+                                                                        | Speaker (ARP)   |
+                          <──────────────────────────────────────        +-----------------+
+                          Feedback path (status reporting)
 ```
 
-1. **Tenant/admin** uses the osac CLI (or REST/gRPC API) to create PublicIP
-   resources.
-2. **fulfillment-service** persists the resource in PostgreSQL and streams
-   events to the fulfillment-controller.
-3. **fulfillment-controller** reconciles API resources into Kubernetes custom
-   resources (CRs) on the target cluster.
-4. **osac-operator** watches the CRs and launches Ansible Automation Platform
-   (AAP) jobs for the actual network configuration.
-5. **AAP roles** create and manage MetalLB IPAddressPools, L2Advertisements,
-   and LoadBalancer Services on the target cluster.
-6. **MetalLB** advertises the allocated IPs via ARP and works with kube-proxy
-   to route traffic to the correct VM pod.
+**Forward path:** The osac CLI sends a request to the fulfillment-service, which
+persists it and streams events to the fulfillment-controller. The controller
+reconciles API resources into Kubernetes CRs on the target cluster. The
+osac-operator watches those CRs and launches AAP jobs to configure MetalLB
+Services and IPAddressPools.
+
+**Feedback path:** The feedback-controller watches CR status on the workload
+cluster (phase transitions, allocated addresses) and reports changes back to the
+fulfillment-service via gRPC Signal RPCs. This closes the control loop, allowing
+the API to reflect the actual state of resources on the cluster.
