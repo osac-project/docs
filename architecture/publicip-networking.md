@@ -99,35 +99,32 @@ PublicIP networking uses three resource types with a clear separation between
 provider-managed infrastructure and tenant self-service:
 
 ```
-  Cloud Provider Admin                    Tenant User
-  (private API)                           (public API)
-                                  
-  +---------------------------+           
-  | PublicIPPool              |           
-  |   CIDRs: 203.0.113.0/28  |           
-  |   IP family: IPv4         |           
-  |   State: Ready            |           
-  |   Available: 12           |           
-  +---------------------------+           
-           |                              
-           |  allocate from pool          
-           v                              
-                                   +---------------------------+
-                                   | PublicIP                  |
-                                   |   Pool: <pool-id>         |
-                                   |   Address: 203.0.113.10   |
-                                   |   State: Allocated        |
-                                   |   Attached: false         |
-                                   +---------------------------+
-                                            |
-                                            |  bind to instance
-                                            v
-                                   +---------------------------+
-                                   | PublicIPAttachment        |
-                                   |   PublicIP: <ip-id>       |
-                                   |   Target: <instance-id>   |
-                                   |   State: Ready            |
-                                   +---------------------------+
+  +-------------------------------+
+  | PublicIPPool                  |  <-- Cloud Provider Admin (private API)
+  |   CIDRs: 203.0.113.0/28      |
+  |   IP family: IPv4             |
+  |   State: Ready                |
+  |   Available: 12               |
+  +-------------------------------+
+               |
+               |  tenant allocates from pool
+               v
+  +-------------------------------+
+  | PublicIP                      |  <-- Tenant User (public API)
+  |   Pool: <pool-id>             |
+  |   Address: 203.0.113.10       |
+  |   State: Allocated            |
+  |   Attached: false             |
+  +-------------------------------+
+               |
+               |  tenant binds to instance
+               v
+  +-------------------------------+
+  | PublicIPAttachment            |  <-- Tenant User (public API)
+  |   PublicIP: <ip-id>           |
+  |   Target: <instance-id>       |
+  |   State: Ready                |
+  +-------------------------------+
 ```
 
 ### PublicIPPool
