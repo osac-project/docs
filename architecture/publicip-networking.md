@@ -300,13 +300,23 @@ The PublicIP workflow involves several OSAC components working together:
                           Feedback path (status reporting)
 ```
 
-**Forward path:** The osac CLI sends a request to the fulfillment-service, which
-persists it and streams events to the fulfillment-controller. The controller
-reconciles API resources into Kubernetes CRs on the target cluster. The
-osac-operator watches those CRs and launches AAP jobs to configure MetalLB
-Services and IPAddressPools.
+**Forward path (provisioning):**
 
-**Feedback path:** The feedback-controller watches CR status on the workload
-cluster (phase transitions, allocated addresses) and reports changes back to the
-fulfillment-service via gRPC Signal RPCs. This closes the control loop, allowing
-the API to reflect the actual state of resources on the cluster.
+1. **Tenant/admin** uses the osac CLI (or REST/gRPC API) to create PublicIP
+   resources.
+2. **fulfillment-service** persists the resource in PostgreSQL and streams
+   events to the fulfillment-controller.
+3. **fulfillment-controller** reconciles API resources into Kubernetes custom
+   resources (CRs) on the target cluster.
+4. **osac-operator** watches the CRs and launches Ansible Automation Platform
+   (AAP) jobs for the actual network configuration.
+5. **AAP roles** create and manage MetalLB IPAddressPools, L2Advertisements,
+   and LoadBalancer Services on the target cluster.
+6. **MetalLB** advertises the allocated IPs via ARP and works with kube-proxy
+   to route traffic to the correct VM pod.
+
+**Feedback path (status reporting):**
+
+7. **feedback-controller** watches CR status on the workload cluster (phase
+   transitions, allocated addresses) and reports changes back to the
+   fulfillment-service via gRPC Signal RPCs, closing the control loop.
