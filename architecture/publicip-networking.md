@@ -275,29 +275,29 @@ The attach/detach mechanism uses a "service swap" pattern:
 The PublicIP workflow involves several OSAC components working together:
 
 ```
-                          Forward path (provisioning)
-                    ─────────────────────────────────────>
+                              Forward path (provisioning)
+                 ────────────────────────────────────────────────>
 
-  +-----------+    +-------------+    +--------------+    +--------------+    +--------+
-  |  osac CLI |    | fulfillment |    | fulfillment- |    | osac-operator|    |  AAP   |
-  |           |--->| -service    |--->| controller   |--->| (controller- |--->|        |
-  | tenant or |    |             |    |              |    |  runtime)    |    | Ansible|
-  | admin     |    | gRPC/REST   |    | reconciles   |    | watches CRs, |    | roles  |
-  |           |    | PostgreSQL  |    | API objects  |    | launches AAP |    |        |
-  +-----------+    +------+------+    | to K8s CRs   |    | jobs         |    +---+----+
-                          ^           +--------------+    +--------------+        |
-                          |                                                      |
-                   gRPC Signal                                          configures MetalLB
-                   (status updates)                                     Services + IPPools
-                          |                                                      |
-                   +------+-------+                                     +--------+--------+
-                   | feedback-    |       watches CR status              | MetalLB         |
-                   | controller  |<─────────────────────────────────────| (L2 mode)       |
-                   |             |       on workload cluster             | IPAddressPool   |
-                   +-------------+                                      | L2Advertisement |
-                                                                        | Speaker (ARP)   |
-                          <──────────────────────────────────────        +-----------------+
-                          Feedback path (status reporting)
+  +-----------+  +-----------+  +------------+  +------------+  +------------+
+  | osac CLI  |  | fulfill-  |  | fulfill-   |  | osac-      |  | AAP        |
+  |           |->| ment-     |->| ment-      |->| operator   |->|            |
+  | tenant or |  | service   |  | controller |  |            |  | Ansible    |
+  | admin     |  |           |  |            |  | watches    |  | roles      |
+  |           |  | gRPC/REST |  | reconciles |  | CRs,       |  |            |
+  +-----------+  | PostgreSQL|  | API to CRs |  | launches   |  +------+-----+
+                 +-----+-----+  +------------+  | AAP jobs   |         |
+                       ^                         +------------+   configures
+                       |                                          MetalLB Svcs
+                 gRPC Signal                                      + IPPools
+                 (status updates)                                       |
+                       |                                          +-----+------+
+                 +-----+------+      watches CR status            | MetalLB    |
+                 | feedback-  |<----------------------------------| (L2 mode)  |
+                 | controller |      on workload cluster          |            |
+                 +------------+                                   +------------+
+
+                 <────────────────────────────────────────────────
+                              Feedback path (status reporting)
 ```
 
 **Forward path (provisioning):**
