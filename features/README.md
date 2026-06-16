@@ -20,3 +20,10 @@ All of this adds up to an easy-to-use, on-demand solution that cloud providers c
 ## Feature Documentation
 
 * [Console Access](MGMT-22670-console-access.md) - Serial console access for compute instances
+* [Netris CaaS Networking](netris-caas-networking.md) - Network traffic flow with Netris backend
+
+## Developer Guides
+
+* [Tenant Setup](../guides/developer/tenant-setup.md) - Create and configure a Tenant
+* [Creating a VM](../guides/developer/computeinstance-guide.md) - Create a ComputeInstance with networking
+* [Assigning a Public IP](../guides/developer/publicip-guide.md) - Allocate and attach a PublicIP to a ComputeInstance

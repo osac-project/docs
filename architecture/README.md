@@ -166,6 +166,7 @@ Details of specific fulfillment types are specified in the following sections.
 * [Cluster Fulfillment](cluster-fulfillment.md)
 * [Bare Metal Server Fulfillment](bm-server-fulfillment.md)
 * [VM Fulfillment](vm-fulfillment.md)
+* [PublicIP Networking](publicip-networking.md)
 
 ### Integration Patterns
 
@@ -238,8 +239,10 @@ node in the cluster.
 
 ### Networking
 
-Isolated networks are an essential element in any multi-tenant cloud. A proposal
-is in progress, and details will be added in this repo upon acceptance.
+Isolated networks are an essential element in any multi-tenant cloud. See the
+[Networking API enhancement proposal](https://github.com/osac-project/enhancement-proposals/tree/main/enhancements/networking)
+for the full design, and [PublicIP Networking](publicip-networking.md) for the
+public IP architecture.
 
 ### Inventory
 
