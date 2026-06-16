@@ -61,6 +61,10 @@ that the provider has made available.
 - A ComputeInstance is in `RUNNING` state (see [ComputeInstance Guide](computeinstance-guide.md)).
 - At least one PublicIPPool has been created by the cloud provider.
 
+> **Tip:** Wherever this guide uses a resource name (e.g., `<pool-name>`),
+> you can also use its UUID. The `osac` CLI accepts either form when
+> referencing existing resources.
+
 ---
 
 ## Step 1: Find an available PublicIPPool
@@ -75,7 +79,7 @@ The output shows each pool's IP family, CIDR ranges, and how many addresses are
 still available. Choose a pool that matches the address family you need (IPv4
 or IPv6) and has available capacity.
 
-Note the **ID** of the pool you want to use.
+Note the **name** of the pool you want to use.
 
 ---
 
@@ -85,8 +89,8 @@ Allocate an address from the chosen pool:
 
 ```bash
 osac create publicip \
-  --name <publicip_name> \
-  --pool <pool-id>
+  --name <publicip-name> \
+  --pool <pool-name>
 ```
 
 The PublicIP starts in `PENDING` state while the system reserves an address.
@@ -113,9 +117,9 @@ ComputeInstance:
 
 ```bash
 osac create publicipattachment \
-  --name <attachment_name> \
-  --public-ip <publicip-id> \
-  --compute-instance <computeinstance-id>
+  --name <attachment-name> \
+  --public-ip <publicip-name> \
+  --compute-instance <computeinstance-name>
 ```
 
 The attachment starts in `PENDING` state while the system configures network
@@ -162,7 +166,7 @@ Delete the PublicIPAttachment to stop routing traffic to the ComputeInstance
 while keeping the IP address allocated:
 
 ```bash
-osac delete publicipattachment <attachment-id>
+osac delete publicipattachment <attachment-name>
 ```
 
 The PublicIP remains in `ALLOCATED` state with `ATTACHED: false`. You can
@@ -174,13 +178,13 @@ First detach the IP if it is currently attached (a PublicIP cannot be deleted
 while attached):
 
 ```bash
-osac delete publicipattachment <attachment-id>
+osac delete publicipattachment <attachment-name>
 ```
 
 Then delete the PublicIP to return the address to the pool:
 
 ```bash
-osac delete publicip <publicip-id>
+osac delete publicip <publicip-name>
 ```
 
 The address becomes available for other tenants to allocate.

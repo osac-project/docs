@@ -33,16 +33,16 @@ route to the pod network and cannot reach the VM:
        |  10.128.0.81:22?        |  (OVN overlay)      |
        |                         |  10.128.0.0/14      |
        X--- NO ----------X       |                     |
-                                 |  +---------------+  |
-       The pod network is an     |  | virt-launcher  |  |
-       overlay. No route exists  |  | pod            |  |
-       from the external         |  |  10.128.0.81   |  |
-       network.                  |  |                 |  |
-                                 |  |  +-----------+ |  |
-                                 |  |  | KubeVirt  | |  |
-                                 |  |  | VM        | |  |
-                                 |  |  +-----------+ |  |
-                                 |  +---------------+  |
+                                 |  +----------------+ |
+       The pod network is an     |  | virt-launcher  | |
+       overlay. No route exists  |  | pod            | |
+       from the external         |  |  10.128.0.81   | |
+       network.                  |  |                | |
+                                 |  |  +-----------+ | |
+                                 |  |  | KubeVirt  | | |
+                                 |  |  | VM        | | |
+                                 |  |  +-----------+ | |
+                                 |  +----------------+ |
                                  +---------------------+
 ```
 
@@ -75,14 +75,14 @@ the public IP is routed through the Kubernetes Service to the VM pod:
        |                         |       | DNAT        |
        |                         |       v             |
        |                         |  +---------------+  |
-       |                         |  | virt-launcher  |  |
-       |                         |  | pod            |  |
-       |                         |  |  10.128.0.81   |  |
-       |                         |  |                 |  |
-       |                         |  |  +-----------+ |  |
-       |  SSH Connected!         |  |  | KubeVirt  | |  |
-       |<--- TCP SYN-ACK -------|  |  | VM        | |  |
-       |                         |  |  +-----------+ |  |
+       |                         |  | virt-launcher  | |
+       |                         |  | pod            | |
+       |                         |  |  10.128.0.81   | |
+       |                         |  |                | |
+       |                         |  |  +-----------+ | |
+       |  SSH Connected!         |  |  | KubeVirt  | | |
+       |<--- TCP SYN-ACK --------|  |  | VM        | | |
+       |                         |  |  +-----------+ | |
        |                         |  +---------------+  |
        |                         +---------------------+
 ```
@@ -99,32 +99,32 @@ PublicIP networking uses three resource types with a clear separation between
 provider-managed infrastructure and tenant self-service:
 
 ```
-  +-------------------------------+
-  | PublicIPPool                  |  <-- Cloud Provider Admin (private API)
-  |   CIDRs: 203.0.113.0/28      |
-  |   IP family: IPv4             |
-  |   State: Ready                |
-  |   Available: 12               |
-  +-------------------------------+
-               |
-               |  tenant allocates from pool
-               v
-  +-------------------------------+
-  | PublicIP                      |  <-- Tenant User (public API)
-  |   Pool: <pool-id>             |
-  |   Address: 203.0.113.10       |
-  |   State: Allocated            |
-  |   Attached: false             |
-  +-------------------------------+
-               |
-               |  tenant binds to instance
-               v
-  +-------------------------------+
-  | PublicIPAttachment            |  <-- Tenant User (public API)
-  |   PublicIP: <ip-id>           |
-  |   Target: <instance-id>       |
-  |   State: Ready                |
-  +-------------------------------+
+  +-------------------------------------+
+  | PublicIPPool                        |  <-- Cloud Provider Admin (private API)
+  |   CIDRs: 203.0.113.0/28             |
+  |   IP family: IPv4                   |
+  |   State: Ready                      |
+  |   Available: 12                     |
+  +-------------------------------------+
+                     |
+                     |  tenant allocates from pool
+                     v
+  +-------------------------------------+
+  | PublicIP                            |  <-- Tenant User (public API)
+  |   Pool: <pool-name>                 |
+  |   Address: 203.0.113.10             |
+  |   State: Allocated                  |
+  |   Attached: false                   |
+  +-------------------------------------+
+                     |
+                     |  tenant binds to ComputeInstance
+                     v
+  +-------------------------------------+
+  | PublicIPAttachment                  |  <-- Tenant User (public API)
+  |   PublicIP: <publicip-name>         |
+  |   Target: <computeinstance-name>    |
+  |   State: Ready                      |
+  +-------------------------------------+
 ```
 
 ### PublicIPPool
@@ -174,7 +174,7 @@ responsible for that stage:
 
 ```
   Phase 1: Pool Provisioning (Cloud Provider Admin)
-  +---------------------------------------------------+
+  +----------------------------------------------------+
   |  PublicIPPool                                      |
   |    CIDRs: 203.0.113.0/28                           |
   |    State: Pending -> Ready                         |
@@ -182,38 +182,38 @@ responsible for that stage:
   |  The system creates a MetalLB IPAddressPool on     |
   |  the target cluster and configures L2              |
   |  advertisement for the CIDR ranges.                |
-  +---------------------------------------------------+
+  +----------------------------------------------------+
        |
        |  Tenant allocates from pool
        v
   Phase 2: IP Allocation (Tenant User)
-  +---------------------------------------------------+
+  +----------------------------------------------------+
   |  PublicIP                                          |
-  |    Address: 203.0.113.10                            |
+  |    Address: 203.0.113.10                           |
   |    State: Pending -> Allocated                     |
   |    Attached: false                                 |
   |                                                    |
   |  A "parking" LoadBalancer Service is created with  |
   |  an empty selector. This reserves the IP via ARP   |
   |  but does not route traffic to any workload.       |
-  +---------------------------------------------------+
+  +----------------------------------------------------+
        |
        |  Tenant creates PublicIPAttachment
        v
   Phase 3: Attachment (Tenant User)
-  +---------------------------------------------------+
+  +----------------------------------------------------+
   |  PublicIPAttachment                                |
-  |    PublicIP: <ip-id>                               |
-  |    ComputeInstance: <instance-id>                   |
+  |    PublicIP: <publicip-name>                       |
+  |    ComputeInstance: <computeinstance-name>         |
   |    State: Pending -> Ready                         |
   |                                                    |
-  |  The system moves the Service into the VM's        |
-  |  namespace with a selector matching the VM pod.    |
-  |  MetalLB advertises the IP and kube-proxy DNATs    |
-  |  traffic to the pod.                               |
+  |  The system moves the Service into the             |
+  |  ComputeInstance's namespace with a selector       |
+  |  matching the VM pod. MetalLB advertises the IP    |
+  |  and kube-proxy DNATs traffic to the pod.          |
   |                                                    |
   |  PublicIP.attached = true                          |
-  +---------------------------------------------------+
+  +----------------------------------------------------+
 ```
 
 ### Detach and release
