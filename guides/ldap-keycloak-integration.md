@@ -110,7 +110,7 @@ on every subsequent API call.
 ### Prerequisites
 
 - **Operating System**: RHEL 8/9, CentOS Stream 9, or Fedora
-- **LDAP Server Software**: 389 Directory Server (`389-ds-base` package), Red Hat Directory Server (RHDS), or OpenLDAP
+- **LDAP Server Software**: 389 Directory Server (`389-ds-base` package) or Red Hat Directory Server (RHDS)
 - **Hardware**: Minimum 2 vCPU, 2 GB RAM, 10 GB disk
 - **Network**: Static IP or resolvable hostname accessible from the Keycloak pod network
 - **Ports**: 389 (LDAP) and optionally 636 (LDAPS) open in the firewall
@@ -273,7 +273,13 @@ In segmented networks, ensure:
 
 ```bash
 KC_URL="https://keycloak.example.com"
+```
 
+> **Note:** The `-k` flag in curl commands below disables TLS certificate
+> verification. This is acceptable for lab environments with self-signed
+> certificates. In production, configure a trusted CA and remove the `-k` flag.
+
+```bash
 KC_TOKEN=$(curl -ks "${KC_URL}/realms/master/protocol/openid-connect/token" \
     -d 'client_id=admin-cli' \
     -d 'grant_type=password' \
@@ -469,14 +475,29 @@ EOF
 
 ### Deleting a User
 
-1. **Login is blocked immediately** when the LDAP entry is removed (bind fails).
-2. **The Keycloak record persists** until a full sync cleans it up.
+1. **Login is blocked immediately** when the LDAP entry is removed (LDAP bind fails).
+2. **The Keycloak record persists** — full sync does NOT automatically remove orphaned users.
 
-Recommended procedure:
+Keycloak's sync process only imports and updates; it does not compare its local
+database against LDAP to purge deleted entries.
+
+**Recommended procedure:**
+
 1. Lock the account in LDAP: `nsAccountLock: true` (389-ds)
 2. Revoke active sessions via Keycloak admin API
 3. Delete from LDAP: `ldapdelete uid=user,...`
-4. Trigger full sync to remove the orphaned KC record
+4. Remove the orphaned KC record using one of these methods:
+   - **Reactive removal** (preferred): Enable "Remove invalid users during searches"
+     in the LDAP provider settings. The orphan is deleted the next time it is
+     accessed (login attempt, admin search, or API lookup).
+   - **Manual API deletion**: Delete the specific user via the Keycloak admin API:
+     ```bash
+     curl -ks -X DELETE -H "Authorization: Bearer ${KC_TOKEN}" \
+         "${KC_URL}/admin/realms/osac/users/<user-id>"
+     ```
+   - **Nuclear option**: Use "Remove imported" in the Admin Console. **Warning:**
+     this removes ALL imported LDAP users from Keycloak, not just the deleted one.
+     They will be re-imported on their next login.
 
 ### Changing a Password
 
@@ -503,13 +524,13 @@ attributes but **never** copies passwords.
 | Mode | What it does | When to use |
 |------|-------------|-------------|
 | **On-login import** | Imports user on first successful login | Default behavior, always active |
-| **Full sync** | Imports ALL users, removes orphans | After initial setup or bulk LDAP changes |
+| **Full sync** | Imports/updates ALL users from LDAP | After initial setup or bulk LDAP changes |
 | **Changed-user sync** | Imports only modified users | Periodic catchup without full scan |
 
 ### Triggering Sync
 
 ```bash
-# Full sync (imports all, removes orphans)
+# Full sync (imports/updates all LDAP users — does NOT remove deleted users)
 curl -ks -X POST -H "Authorization: Bearer ${KC_TOKEN}" \
     "${KC_URL}/admin/realms/osac/user-storage/${COMP_ID}/sync?action=triggerFullSync"
 
@@ -525,7 +546,7 @@ curl -ks -X POST -H "Authorization: Bearer ${KC_TOKEN}" \
 | User attributes (uid, cn, sn, mail) | Yes | LDAP → Keycloak |
 | Passwords | **No** | Verified via LDAP bind at login |
 | New users in LDAP | Yes | Imported to Keycloak |
-| Deleted users in LDAP | Full sync only | Orphan removed on next full sync |
+| Deleted users in LDAP | **No** | Orphan persists until accessed (with "Remove invalid users" enabled) or manually deleted |
 | LDAP groups | Requires Group Mapper | Not configured by default |
 
 ---
