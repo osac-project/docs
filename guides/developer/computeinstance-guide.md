@@ -10,9 +10,10 @@ including the prerequisite networking resources. It assumes you already have a T
 - [Step 1: Identify the NetworkClass](#step-1-identify-the-networkclass)
 - [Step 2: Create a VirtualNetwork](#step-2-create-a-virtualnetwork)
 - [Step 3: Create a Subnet](#step-3-create-a-subnet)
-- [Step 4: Create the ComputeInstance](#step-4-create-the-computeinstance)
-- [Step 5: Monitor the instance](#step-5-monitor-the-instance)
-- [Step 6: Access the console](#step-6-access-the-console)
+- [Step 4: Choose an instance type](#step-4-choose-an-instance-type)
+- [Step 5: Create the ComputeInstance](#step-5-create-the-computeinstance)
+- [Step 6: Monitor the instance](#step-6-monitor-the-instance)
+- [Step 7: Access the console](#step-7-access-the-console)
 
 ---
 
@@ -20,6 +21,7 @@ including the prerequisite networking resources. It assumes you already have a T
 
 - The `osac` CLI is installed and configured (API endpoint, authentication token).
 - A Tenant is in `Ready` state (see [Tenant Setup Guide](tenant-setup.md)).
+- At least one instance type is available (see [Managing Instance Types](instancetype-guide.md)).
 - `oc` CLI configured and logged in to the management cluster (for `oc get vm` monitoring).
 
 ---
@@ -80,10 +82,28 @@ osac get subnet
 
 ---
 
-## Step 4: Create the ComputeInstance
+## Step 4: Choose an instance type
+
+List the available instance types to find the compute configuration for your VM:
+
+```bash
+osac get instancetype
+```
+
+The output shows each type's name, cores, memory, state, and description.
+Choose an ACTIVE instance type that meets your workload requirements.
+
+Note the **NAME** of the instance type you want to use.
+
+For details on instance type lifecycle and management, see
+[Managing Instance Types](instancetype-guide.md).
+
+---
+
+## Step 5: Create the ComputeInstance
 
 Create a YAML file (e.g., `my-vm.yaml`) with the following content. Replace the `subnet`
-value with the Subnet ID from Step 3:
+value with the Subnet ID from Step 3 and the `instance_type` with the name from Step 4:
 
 ```yaml
 '@type': type.googleapis.com/osac.public.v1.ComputeInstance
@@ -96,11 +116,10 @@ metadata:
 spec:
   boot_disk:
     size_gib: 10
-  cores: 2
+  instance_type: <instance-type-name>
   image:
     source_ref: quay.io/containerdisks/fedora:latest
     source_type: registry
-  memory_gib: 2
   subnet: <subnet-id>
   user_data: |
     #cloud-config
@@ -128,7 +147,7 @@ osac create -f my-vm.yaml
 
 ---
 
-## Step 5: Monitor the instance
+## Step 6: Monitor the instance
 
 Track the ComputeInstance status through the OSAC CLI:
 
@@ -146,7 +165,7 @@ Wait for the ComputeInstance state to reach `RUNNING`.
 
 ---
 
-## Step 6: Access the console
+## Step 7: Access the console
 
 Once the ComputeInstance is running, attach to its console:
 
