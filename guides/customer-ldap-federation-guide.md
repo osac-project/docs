@@ -181,7 +181,7 @@ osac create identityprovider \
 **Via OSAC REST API:**
 
 ```bash
-curl -sk -X POST "${OSAC_API}/api/fulfillment/v1/identity_providers" \
+curl -s -X POST "${OSAC_API}/api/fulfillment/v1/identity_providers" \
     -H "Authorization: Bearer ${OSAC_TOKEN}" \
     -H "Content-Type: application/json" \
     -d '{
