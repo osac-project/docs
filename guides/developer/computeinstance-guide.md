@@ -1,19 +1,17 @@
 # Creating a VM with OSAC
 
-This guide walks through creating a ComputeInstance (virtual machine) using the OSAC CLI,
-including the prerequisite networking resources. It assumes you already have a Tenant in
-`Ready` state (see [Tenant Setup Guide](tenant-setup.md)).
+This guide walks through creating a ComputeInstance (virtual machine) using the OSAC CLI.
+It assumes you already have a Tenant in `Ready` state (see [Tenant Setup Guide](tenant-setup.md))
+and networking resources set up (see [Networking Guide](networking-guide.md)).
 
 ## Contents
 
 - [Prerequisites](#prerequisites)
-- [Step 1: Identify the NetworkClass](#step-1-identify-the-networkclass)
-- [Step 2: Create a VirtualNetwork](#step-2-create-a-virtualnetwork)
-- [Step 3: Create a Subnet](#step-3-create-a-subnet)
-- [Step 4: Choose an instance type](#step-4-choose-an-instance-type)
-- [Step 5: Create the ComputeInstance](#step-5-create-the-computeinstance)
-- [Step 6: Monitor the instance](#step-6-monitor-the-instance)
-- [Step 7: Access the console](#step-7-access-the-console)
+- [Step 1: Find a Compute Instance Catalog Item](#step-1-find-a-compute-instance-catalog-item)
+- [Step 2: Choose an instance type](#step-2-choose-an-instance-type)
+- [Step 3: Create the ComputeInstance](#step-3-create-the-computeinstance)
+- [Step 4: Monitor the instance](#step-4-monitor-the-instance)
+- [Step 5: Access the console](#step-5-access-the-console)
 
 ---
 
@@ -21,68 +19,40 @@ including the prerequisite networking resources. It assumes you already have a T
 
 - The `osac` CLI is installed and configured (API endpoint, authentication token).
 - A Tenant is in `Ready` state (see [Tenant Setup Guide](tenant-setup.md)).
-- At least one instance type is available (see [Managing Instance Types](instancetype-guide.md)).
-- `oc` CLI configured and logged in to the management cluster (for `oc get vm` monitoring).
+- Networking resources (VirtualNetwork, Subnet, and optionally SecurityGroups) are created
+  and in `READY` state (see [Networking Guide](networking-guide.md)).
+- At least one compute instance catalog item is published and available
+  (see [Compute Instance Catalog Items Guide](computeinstance-catalogitem-guide.md)).
+- At least one instance type is in `ACTIVE` state
+  (see [Managing Instance Types](instancetype-guide.md)).
 
 ---
 
-## Step 1: Identify the NetworkClass
+## Step 1: Find a Compute Instance Catalog Item
 
-List the available network classes to find the one you will use for your VirtualNetwork:
+Catalog items are curated infrastructure offerings that define defaults and constraints for
+compute instances. List the available catalog items:
 
 ```bash
-osac get networkclass
+osac get computeinstancecatalogitems
 ```
 
-Note the `ID` of the NetworkClass you want to use — you will need it in the next step.
+To inspect a catalog item's details (defaults, editable fields):
+
+```bash
+osac get computeinstancecatalogitems <id> -o yaml
+```
+
+Note the **NAME** or **ID** of the catalog item you want to use.
+
+> **Note:** Catalog items are created by platform admins. If no catalog items are available,
+> contact your platform administrator. For details on catalog item lifecycle management and
+> how field definitions control VM creation, see the
+> [Compute Instance Catalog Items Guide](computeinstance-catalogitem-guide.md).
 
 ---
 
-## Step 2: Create a VirtualNetwork
-
-Create a VirtualNetwork associated with the NetworkClass. The `--ipv4-cidr` defines the
-overall IP address range for the network:
-
-```bash
-osac create virtualnetwork \
-  --name <virtualnetwork_name> \
-  --network-class <networkclass-id> \
-  --ipv4-cidr 192.168.0.0/16
-```
-
-Note the VirtualNetwork `ID` from the output — you will need it when creating a Subnet.
-
-Wait for the VirtualNetwork to reach `READY` state:
-
-```bash
-osac get virtualnetwork
-```
-
----
-
-## Step 3: Create a Subnet
-
-Create a Subnet under the VirtualNetwork. The Subnet CIDR must fall within the
-VirtualNetwork's CIDR range (e.g., `192.168.1.0/24` is within `192.168.0.0/16`):
-
-```bash
-osac create subnet \
-  --name <subnet_name> \
-  --virtual-network <virtualnetwork-id> \
-  --ipv4-cidr 192.168.1.0/24
-```
-
-Note the Subnet `ID` from the output — you will need it in the ComputeInstance spec.
-
-Wait for the Subnet to reach `READY` state:
-
-```bash
-osac get subnet
-```
-
----
-
-## Step 4: Choose an instance type
+## Step 2: Choose an instance type
 
 List the available instance types to find the compute configuration for your VM:
 
@@ -95,49 +65,91 @@ Choose an ACTIVE instance type that meets your workload requirements.
 
 Note the **NAME** of the instance type you want to use.
 
+> **Note:** This step is optional if the catalog item already defines a default value for
+> `instance_type`. You can check the catalog item's `field_definitions` to see
+> whether this field has a non-editable default.
+
 For details on instance type lifecycle and management, see
 [Managing Instance Types](instancetype-guide.md).
 
 ---
 
-## Step 5: Create the ComputeInstance
+## Step 3: Create the ComputeInstance
 
-Create a YAML file (e.g., `my-vm.yaml`) with the following content. Replace the `subnet`
-value with the Subnet ID from Step 3 and the `instance_type` with the name from Step 4:
+Create the ComputeInstance using the `osac create computeinstance` command. Use
+`--catalog-item` to reference the catalog item and `--network-attachment` for networking.
+
+The catalog item's `field_definitions` determine which fields you can set. Fields marked
+as `editable: true` accept your values via CLI flags; fields marked as `editable: false`
+are locked to the catalog item's defaults and cannot be overridden. Inspect the catalog
+item's field definitions beforehand to see which flags apply (see
+[How field definitions shape VM creation](computeinstance-catalogitem-guide.md#how-field-definitions-shape-vm-creation)).
+
+```bash
+osac create computeinstance \
+  --name <computeinstance_name> \
+  --catalog-item <catalog-item-name-or-id> \
+  --instance-type <instance-type-name> \
+  --image quay.io/containerdisks/fedora:latest \
+  --ssh-key "$(cat ~/.ssh/id_ed25519.pub)" \
+  --boot-disk-size 10 \
+  --network-attachment subnet=<subnet-id> \
+  --run-strategy Always \
+  --user-data '#cloud-config
+user: <username>
+password: <password>
+chpasswd:
+  expire: false'
+```
+
+> **Note:** The `--ssh-key` flag installs your SSH public key on the VM, enabling SSH access
+> once the instance is running. The `--user-data` field uses cloud-init format. The example
+> above creates a user and disables password expiry, allowing you to log in via the VM
+> console. Adjust the username and password as needed.
+>
+> The `--network-attachment` flag uses the format
+> `subnet=<subnet-id>[,security-groups=<sg-id1>,<sg-id2>]`. Security groups are optional.
+> The flag can be repeated for multiple NICs. See the
+> [Networking Guide](networking-guide.md) for details on creating subnets and security
+> groups.
+
+### Alternative: Create from a YAML file
+
+You can also create a ComputeInstance from a YAML file with `osac create -f`. Create a file
+(e.g., `my-vm.yaml`) with the following content:
 
 ```yaml
 '@type': type.googleapis.com/osac.public.v1.ComputeInstance
 metadata:
-  creators:
-    - <tenant_name>
   name: <computeinstance_name>
-  tenants:
-    - <tenant_name>
 spec:
-  boot_disk:
-    size_gib: 10
+  catalog_item: <catalog-item-name-or-id>
   instance_type: <instance-type-name>
   image:
     source_ref: quay.io/containerdisks/fedora:latest
     source_type: registry
-  subnet: <subnet-id>
+  ssh_key: <ssh-public-key>
+  boot_disk:
+    size_gib: 10
+  network_attachments:
+    - subnet: <subnet-id>
+  run_strategy: Always
   user_data: |
     #cloud-config
     user: <username>
     password: <password>
     chpasswd:
       expire: false
-  run_strategy: Always
-  template: osac.templates.ocp_virt_vm
-  template_parameters:
-    exposed_ports:
-      '@type': type.googleapis.com/google.protobuf.StringValue
-      value: 22/tcp
 ```
 
-> **Note:** The `user_data` field uses cloud-init format. The example above creates a user
-> and disables password expiry, allowing you to log in via the VM console. Adjust the
-> username and password as needed.
+To attach security groups in the YAML, add them to the network attachment:
+
+```yaml
+  network_attachments:
+    - subnet: <subnet-id>
+      security_groups:
+        - <securitygroup-id>
+```
 
 Create the instance:
 
@@ -147,7 +159,7 @@ osac create -f my-vm.yaml
 
 ---
 
-## Step 6: Monitor the instance
+## Step 4: Monitor the instance
 
 Track the ComputeInstance status through the OSAC CLI:
 
@@ -155,24 +167,24 @@ Track the ComputeInstance status through the OSAC CLI:
 osac get computeinstance
 ```
 
-You can also monitor the underlying VM on the Kubernetes cluster:
-
-```bash
-oc get vm -A
-```
-
 Wait for the ComputeInstance state to reach `RUNNING`.
 
 ---
 
-## Step 7: Access the console
+## Step 5: Access the console
 
-Once the ComputeInstance is running, attach to its console:
+Once the ComputeInstance is running, attach to its serial console:
 
 ```bash
-osac console computeinstance <computeinstance-id>
+osac console serial computeinstance <computeinstance-name-or-id>
 ```
 
-Log in with the credentials defined in `user_data`
+Log in with the credentials defined in `user_data`.
 
 > **Tip:** To exit the console, press `Ctrl+]`.
+
+To connect via VNC instead:
+
+```bash
+osac console vnc computeinstance <computeinstance-name-or-id>
+```
