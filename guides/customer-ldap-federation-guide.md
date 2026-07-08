@@ -1,7 +1,7 @@
 # Integrating Enterprise LDAP with OSAC via External Identity Provider
 
 **Last Updated**: 2026-07-06
-**Audience**: Cloud administrators, tenant operators
+**Audience**: Cloud administrators, tenant administrators
 **Status**: Draft
 
 ---
