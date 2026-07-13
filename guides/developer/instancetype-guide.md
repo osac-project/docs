@@ -6,6 +6,10 @@ by name. It covers the full lifecycle: creating an instance type, listing and
 describing available types, deprecating and obsoleting types that are being
 phased out, reactivating types, and deleting types that are no longer needed.
 
+Each step shows the `osac` CLI command and, for API-facing operations, the
+equivalent gRPC / REST API calls so that the same guide works for both CLI
+users and application developers integrating with OSAC's API.
+
 ## Contents
 
 - [Overview](#overview)
@@ -56,8 +60,27 @@ Organization Users cannot create, modify, or delete instance types.
 
 ## Prerequisites
 
+**CLI users:**
+
 - The `osac` CLI is installed and configured (API endpoint, authentication
   token).
+
+**API users:**
+
+- `grpcurl` (for gRPC) or `curl` (for REST) is installed.
+- Set the following environment variables for the examples in this guide:
+
+  ```bash
+  export OSAC_API="<api-endpoint>"    # host:port (e.g., fulfillment-api.osac.svc:443)
+  export TOKEN="<authentication-token>"
+
+  # Skip TLS verification in development environments:
+  # export GRPCURL_FLAGS="-insecure"
+  # export CURL_FLAGS="-k"
+  ```
+
+**Both:**
+
 - For admin operations: access to the private admin API.
 - For user operations: a Tenant in `Ready` state (see
   [Tenant Setup Guide](tenant-setup.md)).
@@ -73,8 +96,24 @@ Organization Users.
 
 List all instance types:
 
+**CLI:**
+
 ```bash
 osac get instancetype
+```
+
+**gRPC:**
+
+```bash
+grpcurl $GRPCURL_FLAGS -H "Authorization: Bearer $TOKEN" \
+  $OSAC_API osac.public.v1.InstanceTypes/List
+```
+
+**REST:**
+
+```bash
+curl -fsS $CURL_FLAGS -H "Authorization: Bearer $TOKEN" \
+  "https://$OSAC_API/api/fulfillment/v1/instance_types"
 ```
 
 The output shows each type in a table with the following columns:
@@ -85,8 +124,25 @@ The output shows each type in a table with the following columns:
 ACTIVE and DEPRECATED types are shown by default. OBSOLETE types are hidden
 from the default listing. To list only OBSOLETE types, filter by state:
 
+**CLI:**
+
 ```bash
 osac get instancetype --filter "state=OBSOLETE"
+```
+
+**gRPC:**
+
+```bash
+grpcurl $GRPCURL_FLAGS -H "Authorization: Bearer $TOKEN" \
+  -d '{"filter": "state=OBSOLETE"}' \
+  $OSAC_API osac.public.v1.InstanceTypes/List
+```
+
+**REST:**
+
+```bash
+curl -fsS $CURL_FLAGS -H "Authorization: Bearer $TOKEN" \
+  "https://$OSAC_API/api/fulfillment/v1/instance_types?filter=state%3DOBSOLETE"
 ```
 
 ---
@@ -95,8 +151,25 @@ osac get instancetype --filter "state=OBSOLETE"
 
 View the full details of a specific instance type:
 
+**CLI:**
+
 ```bash
 osac describe instancetype standard-4-16
+```
+
+**gRPC:**
+
+```bash
+grpcurl $GRPCURL_FLAGS -H "Authorization: Bearer $TOKEN" \
+  -d '{"id": "standard-4-16"}' \
+  $OSAC_API osac.public.v1.InstanceTypes/Get
+```
+
+**REST:**
+
+```bash
+curl -fsS $CURL_FLAGS -H "Authorization: Bearer $TOKEN" \
+  "https://$OSAC_API/api/fulfillment/v1/instance_types/standard-4-16"
 ```
 
 The output shows the instance type's name, cores, memory_gib, state,
@@ -113,12 +186,52 @@ types that are hidden from the default listing.
 
 Create an instance type with the desired compute specification:
 
+**CLI:**
+
 ```bash
 osac create instancetype \
   --name standard-4-16 \
   --cores 4 \
   --memory-gib 16 \
   --description "Balanced compute: 4 cores, 16 GiB RAM"
+```
+
+> **Note:** Instance type management uses the **private** admin API
+> (`osac.private.v1`). The examples below use the private API service name.
+
+**gRPC:**
+
+```bash
+grpcurl $GRPCURL_FLAGS -H "Authorization: Bearer $TOKEN" -d '{
+  "object": {
+    "id": "standard-4-16",
+    "metadata": {
+      "name": "standard-4-16"
+    },
+    "spec": {
+      "cores": 4,
+      "memory_gib": 16,
+      "description": "Balanced compute: 4 cores, 16 GiB RAM"
+    }
+  }
+}' $OSAC_API osac.private.v1.InstanceTypes/Create
+```
+
+**REST:**
+
+```bash
+curl -fsS $CURL_FLAGS -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" -d '{
+  "id": "standard-4-16",
+  "metadata": {
+    "name": "standard-4-16"
+  },
+  "spec": {
+    "cores": 4,
+    "memory_gib": 16,
+    "description": "Balanced compute: 4 cores, 16 GiB RAM"
+  }
+}' "https://$OSAC_API/api/fulfillment/v1/instance_types"
 ```
 
 The instance type is immediately available in ACTIVE state. Users can select
@@ -129,6 +242,8 @@ it when creating VMs.
 ### Deprecate an instance type
 
 To deprecate an instance type, edit it and change the state:
+
+**CLI:**
 
 ```bash
 osac edit instancetype standard-4-16
@@ -142,6 +257,39 @@ also set the following deprecation fields:
 - `spec.deprecation.obsolescence_timestamp` -- the timestamp when this type
   will become OBSOLETE.
 
+**gRPC:**
+
+```bash
+grpcurl $GRPCURL_FLAGS -H "Authorization: Bearer $TOKEN" -d '{
+  "object": {
+    "id": "standard-4-16",
+    "spec": {
+      "state": "INSTANCE_TYPE_STATE_DEPRECATED",
+      "deprecation": {
+        "replacement": "standard-4-32"
+      }
+    }
+  },
+  "update_mask": {
+    "paths": ["spec.state", "spec.deprecation"]
+  }
+}' $OSAC_API osac.private.v1.InstanceTypes/Update
+```
+
+**REST:**
+
+```bash
+curl -fsS $CURL_FLAGS -X PATCH -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" -d '{
+  "spec": {
+    "state": "INSTANCE_TYPE_STATE_DEPRECATED",
+    "deprecation": {
+      "replacement": "standard-4-32"
+    }
+  }
+}' "https://$OSAC_API/api/fulfillment/v1/instance_types/standard-4-16?update_mask=spec.state,spec.deprecation"
+```
+
 Deprecation and obsolescence timestamps auto-populate when the state
 transitions. A DEPRECATED instance type remains available for VM creation,
 but users receive a warning indicating the type will be phased out.
@@ -152,6 +300,8 @@ but users receive a warning indicating the type will be phased out.
 
 To obsolete an instance type, edit it and change the state:
 
+**CLI:**
+
 ```bash
 osac edit instancetype standard-4-16
 ```
@@ -160,12 +310,41 @@ In the editor, change `spec.state` from `DEPRECATED` to `OBSOLETE`. VMs can
 no longer be created with an OBSOLETE instance type. Existing VMs that
 reference it are not affected.
 
+**gRPC:**
+
+```bash
+grpcurl $GRPCURL_FLAGS -H "Authorization: Bearer $TOKEN" -d '{
+  "object": {
+    "id": "standard-4-16",
+    "spec": {
+      "state": "INSTANCE_TYPE_STATE_OBSOLETE"
+    }
+  },
+  "update_mask": {
+    "paths": ["spec.state"]
+  }
+}' $OSAC_API osac.private.v1.InstanceTypes/Update
+```
+
+**REST:**
+
+```bash
+curl -fsS $CURL_FLAGS -X PATCH -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" -d '{
+  "spec": {
+    "state": "INSTANCE_TYPE_STATE_OBSOLETE"
+  }
+}' "https://$OSAC_API/api/fulfillment/v1/instance_types/standard-4-16?update_mask=spec.state"
+```
+
 ---
 
 ### Reactivate an instance type
 
 Instance type state transitions are bidirectional. To reactivate a
 DEPRECATED or OBSOLETE instance type:
+
+**CLI:**
 
 ```bash
 osac edit instancetype standard-4-16
@@ -175,14 +354,58 @@ In the editor, change `spec.state` back to `ACTIVE`. The instance type
 becomes available for VM creation again. Transitions from OBSOLETE to
 DEPRECATED and from DEPRECATED to ACTIVE are both allowed.
 
+**gRPC:**
+
+```bash
+grpcurl $GRPCURL_FLAGS -H "Authorization: Bearer $TOKEN" -d '{
+  "object": {
+    "id": "standard-4-16",
+    "spec": {
+      "state": "INSTANCE_TYPE_STATE_ACTIVE"
+    }
+  },
+  "update_mask": {
+    "paths": ["spec.state"]
+  }
+}' $OSAC_API osac.private.v1.InstanceTypes/Update
+```
+
+**REST:**
+
+```bash
+curl -fsS $CURL_FLAGS -X PATCH -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" -d '{
+  "spec": {
+    "state": "INSTANCE_TYPE_STATE_ACTIVE"
+  }
+}' "https://$OSAC_API/api/fulfillment/v1/instance_types/standard-4-16?update_mask=spec.state"
+```
+
 ---
 
 ### Delete an instance type
 
 Delete an instance type that is no longer needed:
 
+**CLI:**
+
 ```bash
 osac delete instancetype standard-4-16
+```
+
+**gRPC:**
+
+```bash
+grpcurl $GRPCURL_FLAGS -H "Authorization: Bearer $TOKEN" \
+  -d '{"id": "standard-4-16"}' \
+  $OSAC_API osac.private.v1.InstanceTypes/Delete
+```
+
+**REST:**
+
+```bash
+curl -fsS $CURL_FLAGS -X DELETE -H "Authorization: Bearer $TOKEN" \
+  "https://$OSAC_API/api/fulfillment/v1/instance_types/standard-4-16"
 ```
 
 Deletion is only allowed when no ComputeInstances reference the instance
@@ -196,7 +419,9 @@ error. See [Troubleshooting](#cannot-delete-an-instance-type) for details.
 ### Selecting an instance type for VM creation
 
 When creating a ComputeInstance, specify the instance type using the
-`--instance-type` flag:
+`--instance-type` flag (CLI) or the `spec.instance_type` field (API):
+
+**CLI:**
 
 ```bash
 osac create computeinstance \
@@ -205,10 +430,10 @@ osac create computeinstance \
   ...
 ```
 
-For the full VM creation walkthrough, see the
-[ComputeInstance Guide](computeinstance-guide.md).
+**gRPC / REST:** See the `spec.instance_type` field in the
+[ComputeInstance Guide](computeinstance-guide.md#step-3-create-the-computeinstance).
 
-If you select a DEPRECATED instance type, a warning is printed to stderr
+If you select a DEPRECATED instance type, a warning is returned
 indicating the type will be phased out and suggesting the replacement (if one
 is configured). The VM is still created successfully.
 
@@ -226,8 +451,24 @@ The instance type is referenced by one or more ComputeInstances. Delete or
 migrate all VMs using this instance type before deleting it. To find which
 VMs are running:
 
+**CLI:**
+
 ```bash
 osac get computeinstance
+```
+
+**gRPC:**
+
+```bash
+grpcurl $GRPCURL_FLAGS -H "Authorization: Bearer $TOKEN" \
+  $OSAC_API osac.public.v1.ComputeInstances/List
+```
+
+**REST:**
+
+```bash
+curl -fsS $CURL_FLAGS -H "Authorization: Bearer $TOKEN" \
+  "https://$OSAC_API/api/fulfillment/v1/compute_instances"
 ```
 
 Review the output and delete or recreate the VMs that reference the instance
