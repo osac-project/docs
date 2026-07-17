@@ -162,7 +162,7 @@ osac create computeinstance \
   --catalog-item <catalog-item-name-or-id> \
   --instance-type <instance-type-name> \
   --image quay.io/containerdisks/fedora:latest \
-  --ssh-key "$(cat ~/.ssh/id_ed25519.pub)" \
+  --ssh-public-key "$(cat ~/.ssh/id_ed25519.pub)" \
   --boot-disk-size 10 \
   --network-attachment subnet=<subnet-id> \
   --run-strategy Always \
@@ -188,7 +188,7 @@ grpcurl $GRPCURL_FLAGS -H "Authorization: Bearer $TOKEN" -d '{
         "source_type": "registry",
         "source_ref": "quay.io/containerdisks/fedora:latest"
       },
-      "ssh_key": "<ssh-public-key>",
+      "ssh_public_key": "<ssh-public-key>",
       "boot_disk": {
         "size_gib": 10
       },
@@ -217,7 +217,7 @@ curl -fsS $CURL_FLAGS -X POST -H "Authorization: Bearer $TOKEN" \
       "source_type": "registry",
       "source_ref": "quay.io/containerdisks/fedora:latest"
     },
-    "ssh_key": "<ssh-public-key>",
+    "ssh_public_key": "<ssh-public-key>",
     "boot_disk": {
       "size_gib": 10
     },
@@ -230,7 +230,7 @@ curl -fsS $CURL_FLAGS -X POST -H "Authorization: Bearer $TOKEN" \
 }' "https://$OSAC_API/api/fulfillment/v1/compute_instances"
 ```
 
-> **Note:** The `--ssh-key` flag installs your SSH public key on the VM, enabling SSH access
+> **Note:** The `--ssh-public-key` flag installs your SSH public key on the VM, enabling SSH access
 > once the instance is running. The `--user-data` field uses cloud-init format. The example
 > above creates a user and disables password expiry, allowing you to log in via the VM
 > console. Adjust the username and password as needed.
@@ -269,7 +269,7 @@ spec:
   image:
     source_ref: quay.io/containerdisks/fedora:latest
     source_type: registry
-  ssh_key: <ssh-public-key>
+  ssh_public_key: <ssh-public-key>
   boot_disk:
     size_gib: 10
   network_attachments:

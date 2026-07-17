@@ -229,7 +229,7 @@ description: |
 template: "osac.templates.ocp_virt_vm"
 published: false
 field_definitions:
-  - path: ssh_key
+  - path: ssh_public_key
     display_name: SSH Public Key
     editable: true
   - path: instance_type
@@ -277,7 +277,7 @@ grpcurl $GRPCURL_FLAGS -H "Authorization: Bearer $TOKEN" -d '{
     "template": "osac.templates.ocp_virt_vm",
     "published": false,
     "field_definitions": [
-      {"path": "ssh_key", "display_name": "SSH Public Key", "editable": true},
+      {"path": "ssh_public_key", "display_name": "SSH Public Key", "editable": true},
       {"path": "instance_type", "display_name": "Instance Type", "editable": true, "default": "standard-4-16"},
       {"path": "image.source_type", "display_name": "Image Source Type", "editable": false, "default": "registry"},
       {"path": "image.source_ref", "display_name": "Image", "editable": true, "default": "quay.io/containerdisks/fedora:latest"},
@@ -302,7 +302,7 @@ curl -fsS $CURL_FLAGS -X POST -H "Authorization: Bearer $TOKEN" \
   "template": "osac.templates.ocp_virt_vm",
   "published": false,
   "field_definitions": [
-    {"path": "ssh_key", "display_name": "SSH Public Key", "editable": true},
+    {"path": "ssh_public_key", "display_name": "SSH Public Key", "editable": true},
     {"path": "instance_type", "display_name": "Instance Type", "editable": true, "default": "standard-4-16"},
     {"path": "image.source_type", "display_name": "Image Source Type", "editable": false, "default": "registry"},
     {"path": "image.source_ref", "display_name": "Image", "editable": true, "default": "quay.io/containerdisks/fedora:latest"},
@@ -489,7 +489,7 @@ ignored.
 
 | Path | CLI flag | API field | Description |
 |------|----------|-----------|-------------|
-| `ssh_key` | `--ssh-key` | `spec.ssh_key` | SSH public key installed on the VM |
+| `ssh_public_key` | `--ssh-public-key` | `spec.ssh_public_key` | SSH public key installed on the VM |
 | `instance_type` | `--instance-type` | `spec.instance_type` | Named instance type (e.g., `standard-4-16`) |
 | `run_strategy` | `--run-strategy` | `spec.run_strategy` | VM run strategy (`Always`, `Halted`, etc.) |
 | `user_data` | `--user-data` | `spec.user_data` | Cloud-init or ignition user data |
@@ -521,7 +521,7 @@ Non-editable fields enforce consistency. For example, locking `run_strategy`
 to `Always` ensures all VMs from this catalog item are always running,
 regardless of what the user passes on the CLI or in the API request.
 
-Editable fields give users flexibility. For example, making `ssh_key`
+Editable fields give users flexibility. For example, making `ssh_public_key`
 editable lets each user provide their own public key.
 
 ---
@@ -530,7 +530,7 @@ editable lets each user provide their own public key.
 
 **Defaults**: Every non-editable field must have a `default`. Editable fields
 should also have a `default` unless the field is required and must always be
-provided by the user (like `ssh_key`). If an editable field has no default
+provided by the user (like `ssh_public_key`). If an editable field has no default
 and the user does not provide a value, the request fails.
 
 **Validation**: Editable fields can include a `validation_schema` — a JSON
@@ -659,7 +659,7 @@ osac create computeinstance \
   --name my-vm \
   --catalog-item standard-linux-vm \
   --instance-type standard-4-16 \
-  --ssh-key "$(cat ~/.ssh/id_ed25519.pub)" \
+  --ssh-public-key "$(cat ~/.ssh/id_ed25519.pub)" \
   --boot-disk-size 40 \
   --network-attachment subnet=<subnet-id> \
   --user-data '#cloud-config
@@ -680,7 +680,7 @@ grpcurl $GRPCURL_FLAGS -H "Authorization: Bearer $TOKEN" -d '{
     "spec": {
       "catalog_item": "standard-linux-vm",
       "instance_type": "standard-4-16",
-      "ssh_key": "<ssh-public-key>",
+      "ssh_public_key": "<ssh-public-key>",
       "boot_disk": {"size_gib": 40},
       "network_attachments": [{"subnet": "<subnet-id>"}],
       "user_data": "#cloud-config\nuser: myuser\npassword: <password>\nchpasswd:\n  expire: false"
@@ -700,7 +700,7 @@ curl -fsS $CURL_FLAGS -X POST -H "Authorization: Bearer $TOKEN" \
   "spec": {
     "catalog_item": "standard-linux-vm",
     "instance_type": "standard-4-16",
-    "ssh_key": "<ssh-public-key>",
+    "ssh_public_key": "<ssh-public-key>",
     "boot_disk": {"size_gib": 40},
     "network_attachments": [{"subnet": "<subnet-id>"}],
     "user_data": "#cloud-config\nuser: myuser\npassword: <password>\nchpasswd:\n  expire: false"
@@ -759,12 +759,12 @@ understand the allowed values.
 ### Required field missing
 
 ```text
-Error: field 'ssh_key' is required but no value was provided and no default is defined
+Error: field 'ssh_public_key' is required but no value was provided and no default is defined
 ```
 
 The catalog item has an editable field with no default, and you did not
-provide a value. Add the corresponding CLI flag (e.g., `--ssh-key`) or
-API field (e.g., `spec.ssh_key`) to your request.
+provide a value. Add the corresponding CLI flag (e.g., `--ssh-public-key`) or
+API field (e.g., `spec.ssh_public_key`) to your request.
 
 ### Instance type is obsolete
 
