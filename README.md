@@ -8,6 +8,9 @@ which may not yet be implemented.
 [Architecture](architecture/): Description of components, how they work
 together, and the design decisions that have been made.
 
+[Guides](guides/): Step-by-step configuration and usage guides for
+administrators and developers.
+
 ## Introduction
 
 There is a worldwide trend towards Sovereign AI Clouds (SACs), where countries
