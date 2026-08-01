@@ -35,7 +35,7 @@ long-lived streaming connections that would be terminated by this timeout.
 A dedicated route must be configured for the `Console/Connect` RPC with
 `timeout: 0s` to disable Envoy's request timeout for console streams. This
 route is included in the default OSAC installer manifests
-(`fulfillment-service/manifests/base/ingress-proxy/configmap.yaml`).
+(`fulfillment-service/charts/service/templates/ingress-proxy/_config.yaml.tpl`).
 
 If you are using a custom Envoy configuration, ensure the console route is
 present **before** the default gRPC catch-all route:

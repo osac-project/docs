@@ -213,7 +213,7 @@ stringData:
 
 ### Code
 
-- [osac-operator](https://github.com/osac-project/osac-operator) - Controller implementation
+- [osac-operator](https://github.com/osac-project/osac/tree/main/osac-operator) - Controller implementation
 - `pkg/provisioning/` - Provider interface and AAP implementation
 - `internal/aap/` - AAP REST client
 

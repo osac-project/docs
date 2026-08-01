@@ -184,7 +184,7 @@ to identify the user and tenant.
 ### User Interfaces
 
 OSAC includes [a command-line
-utility](https://github.com/osac-project/fulfillment-service) that can be used to
+utility](https://github.com/osac-project/osac/tree/main/fulfillment-service) that can be used to
 interact with the API.
 
 OSAC may also include a web UI that can be used for demos or proofs of concept.

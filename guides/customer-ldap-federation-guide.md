@@ -117,7 +117,7 @@ ADFS, PingFederate, or your own Keycloak), you only need to:
 ### Step 1: Register Your IdP with OSAC
 
 As a tenant administrator, use the
-[OSAC identity providers API](https://github.com/osac-project/fulfillment-service/blob/main/proto/public/osac/public/v1/identity_providers_service.proto)
+[OSAC identity providers API](https://github.com/osac-project/osac/blob/main/fulfillment-service/proto/public/osac/public/v1/identity_providers_service.proto)
 to register your IdP. The OSAC administrator will provide you with
 break-glass credentials to get started.
 

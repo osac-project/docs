@@ -181,10 +181,11 @@ See existing `.puml` files in `architecture/aap-provisioning/diagrams/` for exam
 
 ### Cross-References
 
-Link to related content in other OSAC repos:
+Link to related content in other OSAC repos, or to the relevant subdirectory of
+the `osac` mono-repo:
 - Enhancement proposals: `https://github.com/osac-project/enhancement-proposals`
-- API definitions: `https://github.com/osac-project/fulfillment-service`
-- Operator implementation: `https://github.com/osac-project/osac-operator`
+- API definitions: `https://github.com/osac-project/osac/tree/main/fulfillment-service`
+- Operator implementation: `https://github.com/osac-project/osac/tree/main/osac-operator`
 
 ### Versioning and Release-Specific Content
 
