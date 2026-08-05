@@ -2,6 +2,9 @@
 
 ## Structure
 
+[API Spec (OpenAPI)](https://osac-project.github.io/osac/): Hosted OpenAPI
+specification for the fulfillment-service API.
+
 [Features](features/): Description of key features and capabilities, some of
 which may not yet be implemented.
 
