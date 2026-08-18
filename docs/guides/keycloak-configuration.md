@@ -290,16 +290,20 @@ oc wait keycloakrealmimport/osac-realm-import -n keycloak \
 
 ## Upgrade Notes
 
-When upgrading the Keycloak operator:
+For the complete upgrade and rollback procedure — including database backup,
+operator upgrade via OLM, PostgreSQL version changes, and rollback steps — see
+the [Keycloak Upgrade and Rollback Runbook](keycloak-upgrade-rollback.md).
 
-1. **Back up the database** before upgrading
+Quick summary:
+
+1. **Back up the database** before upgrading (`pg_dump`)
 2. **Update the `startingCSV`** in `prerequisites/keycloak/operator.yaml` to the
    new version
 3. **Approve the InstallPlan** (manual approval is required)
 4. **Wait for the Keycloak CR** to return to Ready state after the operator upgrade
 5. **Verify realm access** by checking the realm endpoint responds
 
-For detailed upgrade procedures, see the
+For upstream Keycloak upgrade guidance, see the
 [Keycloak Operator Upgrade Guide](https://www.keycloak.org/operator/upgrade).
 
 ---
