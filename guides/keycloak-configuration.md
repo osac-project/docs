@@ -40,10 +40,10 @@ authentication. All OSAC services authenticate against a single realm named
 - **Realm roles** for authorization (e.g., `tenant-admin`)
 
 The authoritative realm definition lives in the
-[fulfillment-service](https://github.com/osac-project/fulfillment-service)
-repository at `it/charts/keycloak/files/realm.json`. The
-[osac-installer](https://github.com/osac-project/osac-installer) maintains a
-deployment-ready copy at `prerequisites/keycloak/files/realm.json`.
+[fulfillment-service](https://github.com/osac-project/osac)
+repository at `fulfillment-service/it/charts/keycloak/files/realm.json`. The
+[osac-installer](https://github.com/osac-project/osac) maintains a
+deployment-ready copy at `osac-installer/charts/osac-prereqs/files/realm.json`.
 
 ---
 
@@ -105,10 +105,10 @@ ensuring CLI tokens always contain these claims.
 
 ### Groups and Multi-Tenancy
 
-OSAC maps Keycloak groups to tenants. Each group represents a tenant, and users
-are assigned to groups to grant access to that tenant's resources.
+OSAC maps Keycloak Organization to tenants. Each Organization represents a tenant, and users
+are assigned to Keycloak Organization Groups to grant access to that tenant's resources.
 
-| Group | Purpose |
+| Organization | Purpose |
 |-------|---------|
 | `admins` | Platform administrators |
 | `tenant1` | Test tenant 1 |
@@ -116,18 +116,18 @@ are assigned to groups to grant access to that tenant's resources.
 | `my_group` | Test group |
 | `your_group` | Test group |
 
-The `groups` claim in the JWT token carries the user's group memberships. The
+The `organization` claim in the JWT token carries the user's tenant memberships. The
 fulfillment service uses this claim to enforce tenant isolation — users can only
-access resources belonging to their group(s).
+access resources belonging to their Organization.
 
-Users can belong to multiple groups (e.g., the `twotenant` test user belongs to
-both `tenant1` and `tenant2`).
+Users can only belong to one tenant (Organization) at a time.
 
 ### Realm Roles
 
 | Role | Description |
 |------|-------------|
 | `tenant-admin` | Grants elevated permissions within a tenant (e.g., managing users, creating resources) |
+| `tenant-idp-manager` | Grants permission to manage identity providers within a tenant |
 | `default-roles-my realm` | Composite role assigned to all users (includes `offline_access`, `uma_authorization`, `view-profile`, `manage-account`) |
 
 ---
