@@ -4,6 +4,10 @@ This guide covers how to upgrade the OSAC Keycloak deployment (operator, server,
 database) and how to roll back if something goes wrong. For general Keycloak
 configuration, see [keycloak-configuration.md](keycloak-configuration.md).
 
+> **Note**: This runbook applies only to Keycloak deployed via OLM (the Keycloak
+> Operator). If your installation uses the Helm-managed Keycloak Deployment
+> (the default in `osac-installer`), refer to the osac-installer documentation instead.
+
 ## Table of Contents
 
 - [Overview](#overview)

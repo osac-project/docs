@@ -246,7 +246,8 @@ oc wait csv/${KC_CSV} -n keycloak \
   --for=jsonpath='{.status.phase}'=Succeeded --timeout=300s
 ```
 
-The Subscription pins to a specific operator version via `startingCSV` with
+The Subscription pins to a specific operator version via `startingCSV`
+(e.g. `keycloak-operator.v26.6.4`, matching Keycloak server `26.6.4`) with
 `installPlanApproval: Manual` for controlled upgrades.
 
 ### Keycloak Instance
@@ -329,5 +330,15 @@ service:
 4. **Ensure the `osac-api` audience scope** is configured on your clients — the
    fulfillment service validates this audience in tokens
 
-The realm.json in the osac-installer repository can be imported into your
-Keycloak instance as a starting point, then customized for your environment.
+For the realm itself, either create it manually or import the `realm.json` from
+the osac-installer repository as a starting point and customize for your
+environment:
+
+```bash
+# Import realm.json via the Keycloak Admin API
+curl -k -sf -X POST \
+  "https://your-keycloak.example.com/admin/realms" \
+  -H "Authorization: Bearer ${ADMIN_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d @osac-installer/charts/osac-prereqs/files/realm.json
+```
