@@ -36,7 +36,7 @@ authentication. All OSAC services authenticate against a single realm named
 
 - **Clients** for the CLI, controller, and admin tools
 - **Client scopes** that add OSAC-specific claims (audience, username, groups) to tokens
-- **Groups** that map to OSAC tenants for multi-tenant isolation
+- **Organizations** that map to OSAC tenants for multi-tenant isolation
 - **Realm roles** for authorization (e.g., `tenant-admin`)
 
 The authoritative realm definition lives in the
