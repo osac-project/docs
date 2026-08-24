@@ -701,26 +701,23 @@ create a new one with the correct `pci_device_selector` and `resource_name`.
 
 ---
 
-### GPU columns blank for a known GPU-enabled instance type
+### GPU columns show 0 / - for a known GPU-enabled instance type
 
 The GPUS column shows `0` and GPU NAME shows `-` for an instance type that
 was expected to include GPU hardware.
 
-This means the instance type was created without the `gpu` field — either
-before the GPU feature was deployed, or the field was omitted during
-creation. The `gpu` field is immutable after creation, so it cannot be
-added to an existing instance type.
-
-1. Verify the instance type was created without GPU fields:
+1. Check whether the instance type has GPU fields:
 
    ```bash
    osac get instancetype <name> -o json | jq '.spec.gpu'
    ```
 
-   If the output is `null`, the instance type has no GPU configuration.
+2. If the output is `null`, the instance type was created without the `gpu`
+   field — either before the GPU feature was deployed, or the field was
+   omitted during creation. The `gpu` field is immutable after creation, so
+   it cannot be added to an existing instance type.
 
-2. Create a new instance type with the correct GPU fields (see
-   [GPU-enabled instance types](#gpu-enabled-instance-types)).
-
-3. Deprecate or delete the old instance type if it is no longer needed (see
+   Create a new instance type with the correct GPU fields (see
+   [GPU-enabled instance types](#gpu-enabled-instance-types)), then
+   deprecate or delete the old one if it is no longer needed (see
    [Deprecate an instance type](#deprecate-an-instance-type)).
