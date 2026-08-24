@@ -1,10 +1,11 @@
 # Managing Instance Types
 
 This guide walks through managing instance types in OSAC. Instance types are
-pre-configured compute bundles (cores, memory) that virtual machines reference
-by name. It covers the full lifecycle: creating an instance type, listing and
-describing available types, deprecating and obsoleting types that are being
-phased out, reactivating types, and deleting types that are no longer needed.
+pre-configured compute bundles (cores, memory, and optionally GPU hardware)
+that virtual machines reference by name. It covers the full lifecycle:
+creating an instance type, listing and describing available types, deprecating
+and obsoleting types that are being phased out, reactivating types, and
+deleting types that are no longer needed.
 
 Each step shows the `osac` CLI command and, for API-facing operations, the
 equivalent gRPC / REST API calls so that the same guide works for both CLI
@@ -13,10 +14,12 @@ users and application developers integrating with OSAC's API.
 ## Contents
 
 - [Overview](#overview)
+  - [GPU fields](#gpu-fields)
 - [Who does what](#who-does-what)
 - [Prerequisites](#prerequisites)
 - [Browsing instance types](#browsing-instance-types)
   - [List instance types](#list-instance-types)
+  - [Identifying GPU-enabled instance types](#identifying-gpu-enabled-instance-types)
   - [Describe an instance type](#describe-an-instance-type)
 - [Admin operations](#admin-operations)
   - [Create an instance type](#create-an-instance-type)
@@ -34,16 +37,41 @@ users and application developers integrating with OSAC's API.
 
 Instance types define standardized compute configurations that users select
 when creating virtual machines. Instead of specifying raw resource values,
-users choose a named instance type that maps to a specific number of cores
-and amount of memory.
+users choose a named instance type that maps to a specific number of cores,
+amount of memory, and optionally GPU hardware.
 
 | Resource | Purpose | Managed by |
 |----------|---------|------------|
-| **InstanceType** | Pre-configured compute bundle (cores, memory) that VMs reference by name | Cloud Provider Admin |
+| **InstanceType** | Pre-configured compute bundle (cores, memory, optional GPU) that VMs reference by name | Cloud Provider Admin |
 
 Cloud Provider Admins create and manage instance types through the private
 admin API. Organization Users browse the available types through the public
 API and select one when creating a VM.
+
+### GPU fields
+
+Instance types can optionally include GPU hardware specifications. When
+present, the `gpu` field defines the GPU devices that will be attached to
+VMs provisioned with this instance type via KubeVirt host device passthrough.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `gpu.pci_device_selector` | string | PCI vendor:device ID identifying the GPU hardware (e.g., `10DE:20B0`). Must match the device selector configured on the cluster's GPU nodes. |
+| `gpu.resource_name` | string | Kubernetes device plugin resource name (e.g., `nvidia.com/A100`). Used by KubeVirt to request GPU resources from the node. |
+| `gpu.count` | int32 | Number of GPU devices of this type (1–16). |
+
+**Validation rules:** When the `gpu` field is present, all three sub-fields
+are required. `pci_device_selector` and `resource_name` must be non-empty
+strings. `count` must be between 1 and 16.
+
+**Immutability:** The `gpu` field, like `cores` and `memory_gib`, is
+immutable after creation. To change the GPU configuration, deprecate the
+existing instance type and create a new one.
+
+The Cloud Provider Admin is responsible for entering `pci_device_selector`
+and `resource_name` values that match the GPU hardware and device plugins
+installed on the cluster nodes. OSAC does not validate these values against
+the cluster's actual hardware inventory.
 
 ---
 
@@ -118,8 +146,11 @@ curl -fsS $CURL_FLAGS -H "Authorization: Bearer $TOKEN" \
 
 The output shows each type in a table with the following columns:
 
-| NAME | CORES | MEMORY | STATE | DESCRIPTION |
-|------|-------|--------|-------|-------------|
+| NAME | CORES | MEMORY | GPUS | GPU NAME | STATE | DESCRIPTION |
+|------|-------|--------|------|----------|-------|-------------|
+
+GPU-enabled instance types show the GPU count and resource name. Non-GPU
+types show `0` and `-` in the GPU columns.
 
 ACTIVE and DEPRECATED types are shown by default. OBSOLETE types are hidden
 from the default listing. To list only OBSOLETE types, filter by state:
@@ -143,6 +174,44 @@ grpcurl $GRPCURL_FLAGS -H "Authorization: Bearer $TOKEN" \
 ```bash
 curl -fsS $CURL_FLAGS -H "Authorization: Bearer $TOKEN" \
   "https://$OSAC_API/api/fulfillment/v1/instance_types?filter=state%3DOBSOLETE"
+```
+
+---
+
+### Identifying GPU-enabled instance types
+
+The CLI table output includes GPUS and GPU NAME columns. GPU-enabled
+instance types show the GPU count and resource name, while non-GPU types
+show `0` and `-`.
+
+To list only GPU-enabled instance types, use the `has(this.spec.gpu)` CEL
+filter:
+
+**CLI:**
+
+```bash
+osac get instancetype --filter "has(this.spec.gpu)"
+```
+
+**gRPC:**
+
+```bash
+grpcurl $GRPCURL_FLAGS -H "Authorization: Bearer $TOKEN" \
+  -d '{"filter": "has(this.spec.gpu)"}' \
+  $OSAC_API osac.public.v1.InstanceTypes/List
+```
+
+**REST:**
+
+```bash
+curl -fsS $CURL_FLAGS -H "Authorization: Bearer $TOKEN" \
+  "https://$OSAC_API/api/fulfillment/v1/instance_types?filter=has(this.spec.gpu)"
+```
+
+To filter by a specific GPU resource name:
+
+```bash
+osac get instancetype --filter "this.spec.gpu.resource_name == 'nvidia.com/A100'"
 ```
 
 ---
@@ -173,7 +242,9 @@ curl -fsS $CURL_FLAGS -H "Authorization: Bearer $TOKEN" \
 ```
 
 The output shows the instance type's name, cores, memory_gib, state,
-description, and deprecation details if the type has been deprecated.
+description, and deprecation details if the type has been deprecated. For
+GPU-enabled instance types, the output also includes the `gpu` field with
+`pci_device_selector`, `resource_name`, and `count`.
 
 This works for any instance type regardless of state, including OBSOLETE
 types that are hidden from the default listing.
@@ -236,6 +307,77 @@ curl -fsS $CURL_FLAGS -X POST -H "Authorization: Bearer $TOKEN" \
 
 The instance type is immediately available in ACTIVE state. Users can select
 it when creating VMs.
+
+#### GPU-enabled instance types
+
+To create an instance type with GPU hardware, include the `gpu` field with
+`pci_device_selector`, `resource_name`, and `count`. See
+[GPU fields](#gpu-fields) for validation rules and immutability.
+
+**CLI:**
+
+```bash
+osac create instancetype \
+  --name gpu-a100-8core \
+  --cores 8 \
+  --memory-gib 64 \
+  --gpu-pci-device-selector "10DE:20B0" \
+  --gpu-resource-name "nvidia.com/A100" \
+  --gpu-count 1 \
+  --description "8 vCPU, 64 GiB, 1x A100 GPU"
+```
+
+**gRPC:**
+
+```bash
+grpcurl $GRPCURL_FLAGS -H "Authorization: Bearer $TOKEN" -d '{
+  "object": {
+    "id": "gpu-a100-8core",
+    "metadata": {
+      "name": "gpu-a100-8core"
+    },
+    "spec": {
+      "cores": 8,
+      "memory_gib": 64,
+      "description": "8 vCPU, 64 GiB, 1x A100 GPU",
+      "gpu": {
+        "pci_device_selector": "10DE:20B0",
+        "resource_name": "nvidia.com/A100",
+        "count": 1
+      }
+    }
+  }
+}' $OSAC_API osac.private.v1.InstanceTypes/Create
+```
+
+**REST:**
+
+```bash
+curl -fsS $CURL_FLAGS -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" -d '{
+  "id": "gpu-a100-8core",
+  "metadata": {
+    "name": "gpu-a100-8core"
+  },
+  "spec": {
+    "cores": 8,
+    "memory_gib": 64,
+    "description": "8 vCPU, 64 GiB, 1x A100 GPU",
+    "gpu": {
+      "pci_device_selector": "10DE:20B0",
+      "resource_name": "nvidia.com/A100",
+      "count": 1
+    }
+  }
+}' "https://$OSAC_API/api/fulfillment/v1/instance_types"
+```
+
+> **Important:** The `pci_device_selector` (e.g., `10DE:20B0`) and
+> `resource_name` (e.g., `nvidia.com/A100`) must match the GPU hardware and
+> device plugins configured on the cluster's worker nodes. Incorrect values
+> cause provisioning failures at the KubeVirt scheduling layer. See
+> [Troubleshooting](#computeinstance-stuck-in-provisioning-state-gpu) for
+> diagnosis steps.
 
 ---
 
@@ -522,3 +664,67 @@ osac describe instancetype standard-4-16
 If a replacement is configured, the output shows the replacement name and the
 planned obsolescence date. Consider migrating future VMs to the replacement
 instance type.
+
+---
+
+### ComputeInstance stuck in Provisioning state (GPU)
+
+A ComputeInstance referencing a GPU-enabled instance type stays in
+`Provisioning` state indefinitely.
+
+This typically means the `pci_device_selector` or `resource_name` in the
+instance type does not match the GPU hardware or device plugins on the
+cluster's worker nodes.
+
+1. Check the ComputeInstance conditions for AAP job failure reasons:
+
+   ```bash
+   osac describe computeinstance <name>
+   ```
+
+2. Verify the instance type's GPU fields match the cluster's actual hardware.
+   Check whether the configured `resource_name` is allocatable on nodes
+   intended for GPU workloads:
+
+   ```bash
+   RESOURCE_NAME="nvidia.com/A100"  # from the InstanceType's gpu.resource_name
+   kubectl get nodes -o json | jq -r --arg res "$RESOURCE_NAME" \
+     '.items[] | "\(.metadata.name)\t\(.status.allocatable[$res] // "not available")"'
+   ```
+
+   Nodes without matching GPU hardware or device plugins will show
+   `not available` — this is normal for non-GPU worker nodes. At least one
+   node must report the resource for GPU scheduling to succeed.
+
+3. Check the KubeVirt VM pod events for GPU scheduling failures:
+
+   ```bash
+   kubectl describe pod <vm-pod>
+   ```
+
+If the values do not match, the instance type's GPU fields cannot be
+corrected (they are immutable). Deprecate the incorrect instance type and
+create a new one with the correct `pci_device_selector` and `resource_name`.
+
+---
+
+### GPU columns show 0 / - for a known GPU-enabled instance type
+
+The GPUS column shows `0` and GPU NAME shows `-` for an instance type that
+was expected to include GPU hardware.
+
+1. Check whether the instance type has GPU fields:
+
+   ```bash
+   osac get instancetype <name> -o json | jq '.spec.gpu'
+   ```
+
+2. If the output is `null`, the instance type was created without the `gpu`
+   field — either before the GPU feature was deployed, or the field was
+   omitted during creation. The `gpu` field is immutable after creation, so
+   it cannot be added to an existing instance type.
+
+   Create a new instance type with the correct GPU fields (see
+   [GPU-enabled instance types](#gpu-enabled-instance-types)), then
+   deprecate or delete the old one if it is no longer needed (see
+   [Deprecate an instance type](#deprecate-an-instance-type)).
