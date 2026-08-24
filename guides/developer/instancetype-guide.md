@@ -683,13 +683,18 @@ cluster's worker nodes.
    ```
 
 2. Verify the instance type's GPU fields match the cluster's actual hardware.
-   Check whether the configured `resource_name` is allocatable on each node:
+   Check whether the configured `resource_name` is allocatable on nodes
+   intended for GPU workloads:
 
    ```bash
    RESOURCE_NAME="nvidia.com/A100"  # from the InstanceType's gpu.resource_name
    kubectl get nodes -o json | jq -r --arg res "$RESOURCE_NAME" \
      '.items[] | "\(.metadata.name)\t\(.status.allocatable[$res] // "not available")"'
    ```
+
+   Nodes without matching GPU hardware or device plugins will show
+   `not available` — this is normal for non-GPU worker nodes. At least one
+   node must report the resource for GPU scheduling to succeed.
 
 3. Check the KubeVirt VM pod events for GPU scheduling failures:
 
