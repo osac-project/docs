@@ -178,6 +178,44 @@ curl -fsS $CURL_FLAGS -H "Authorization: Bearer $TOKEN" \
 
 ---
 
+### Identifying GPU-enabled instance types
+
+The CLI table output includes GPUS and GPU NAME columns. GPU-enabled
+instance types show the GPU count and resource name, while non-GPU types
+show `0` and `-`.
+
+To list only GPU-enabled instance types, use the `has(this.spec.gpu)` CEL
+filter:
+
+**CLI:**
+
+```bash
+osac get instancetype --filter "has(this.spec.gpu)"
+```
+
+**gRPC:**
+
+```bash
+grpcurl $GRPCURL_FLAGS -H "Authorization: Bearer $TOKEN" \
+  -d '{"filter": "has(this.spec.gpu)"}' \
+  $OSAC_API osac.public.v1.InstanceTypes/List
+```
+
+**REST:**
+
+```bash
+curl -fsS $CURL_FLAGS -H "Authorization: Bearer $TOKEN" \
+  "https://$OSAC_API/api/fulfillment/v1/instance_types?filter=has(this.spec.gpu)"
+```
+
+To filter by a specific GPU resource name:
+
+```bash
+osac get instancetype --filter "this.spec.gpu.resource_name == 'nvidia.com/A100'"
+```
+
+---
+
 ### Describe an instance type
 
 View the full details of a specific instance type:
@@ -204,7 +242,9 @@ curl -fsS $CURL_FLAGS -H "Authorization: Bearer $TOKEN" \
 ```
 
 The output shows the instance type's name, cores, memory_gib, state,
-description, and deprecation details if the type has been deprecated.
+description, and deprecation details if the type has been deprecated. For
+GPU-enabled instance types, the output also includes the `gpu` field with
+`pci_device_selector`, `resource_name`, and `count`.
 
 This works for any instance type regardless of state, including OBSOLETE
 types that are hidden from the default listing.
