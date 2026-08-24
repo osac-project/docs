@@ -664,3 +664,63 @@ osac describe instancetype standard-4-16
 If a replacement is configured, the output shows the replacement name and the
 planned obsolescence date. Consider migrating future VMs to the replacement
 instance type.
+
+---
+
+### ComputeInstance stuck in Provisioning state (GPU)
+
+A ComputeInstance referencing a GPU-enabled instance type stays in
+`Provisioning` state indefinitely.
+
+This typically means the `pci_device_selector` or `resource_name` in the
+instance type does not match the GPU hardware or device plugins on the
+cluster's worker nodes.
+
+1. Check the ComputeInstance conditions for AAP job failure reasons:
+
+   ```bash
+   osac describe computeinstance <name>
+   ```
+
+2. Verify the instance type's GPU fields match the cluster's actual hardware.
+   Check which GPU resources the nodes report as allocatable:
+
+   ```bash
+   kubectl get nodes -o json | jq '.items[].status.allocatable'
+   ```
+
+3. Check the KubeVirt VM pod events for GPU scheduling failures:
+
+   ```bash
+   kubectl describe pod <vm-pod>
+   ```
+
+If the values do not match, the instance type's GPU fields cannot be
+corrected (they are immutable). Deprecate the incorrect instance type and
+create a new one with the correct `pci_device_selector` and `resource_name`.
+
+---
+
+### GPU columns blank for a known GPU-enabled instance type
+
+The GPUS column shows `0` and GPU NAME shows `-` for an instance type that
+was expected to include GPU hardware.
+
+This means the instance type was created without the `gpu` field — either
+before the GPU feature was deployed, or the field was omitted during
+creation. The `gpu` field is immutable after creation, so it cannot be
+added to an existing instance type.
+
+1. Verify the instance type was created without GPU fields:
+
+   ```bash
+   osac get instancetype <name> -o json | jq '.spec.gpu'
+   ```
+
+   If the output is `null`, the instance type has no GPU configuration.
+
+2. Create a new instance type with the correct GPU fields (see
+   [GPU-enabled instance types](#gpu-enabled-instance-types)).
+
+3. Deprecate or delete the old instance type if it is no longer needed (see
+   [Deprecate an instance type](#deprecate-an-instance-type)).
