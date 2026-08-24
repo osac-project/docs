@@ -268,6 +268,77 @@ curl -fsS $CURL_FLAGS -X POST -H "Authorization: Bearer $TOKEN" \
 The instance type is immediately available in ACTIVE state. Users can select
 it when creating VMs.
 
+#### GPU-enabled instance types
+
+To create an instance type with GPU hardware, include the `gpu` field with
+`pci_device_selector`, `resource_name`, and `count`. See
+[GPU fields](#gpu-fields) for validation rules and immutability.
+
+**CLI:**
+
+```bash
+osac create instancetype \
+  --name gpu-a100-8core \
+  --cores 8 \
+  --memory-gib 64 \
+  --gpu-pci-device-selector "10DE:20B0" \
+  --gpu-resource-name "nvidia.com/A100" \
+  --gpu-count 1 \
+  --description "8 vCPU, 64 GiB, 1x A100 GPU"
+```
+
+**gRPC:**
+
+```bash
+grpcurl $GRPCURL_FLAGS -H "Authorization: Bearer $TOKEN" -d '{
+  "object": {
+    "id": "gpu-a100-8core",
+    "metadata": {
+      "name": "gpu-a100-8core"
+    },
+    "spec": {
+      "cores": 8,
+      "memory_gib": 64,
+      "description": "8 vCPU, 64 GiB, 1x A100 GPU",
+      "gpu": {
+        "pci_device_selector": "10DE:20B0",
+        "resource_name": "nvidia.com/A100",
+        "count": 1
+      }
+    }
+  }
+}' $OSAC_API osac.private.v1.InstanceTypes/Create
+```
+
+**REST:**
+
+```bash
+curl -fsS $CURL_FLAGS -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" -d '{
+  "id": "gpu-a100-8core",
+  "metadata": {
+    "name": "gpu-a100-8core"
+  },
+  "spec": {
+    "cores": 8,
+    "memory_gib": 64,
+    "description": "8 vCPU, 64 GiB, 1x A100 GPU",
+    "gpu": {
+      "pci_device_selector": "10DE:20B0",
+      "resource_name": "nvidia.com/A100",
+      "count": 1
+    }
+  }
+}' "https://$OSAC_API/api/fulfillment/v1/instance_types"
+```
+
+> **Important:** The `pci_device_selector` (e.g., `10DE:20B0`) and
+> `resource_name` (e.g., `nvidia.com/A100`) must match the GPU hardware and
+> device plugins configured on the cluster's worker nodes. Incorrect values
+> cause provisioning failures at the KubeVirt scheduling layer. See
+> [Troubleshooting](#computeinstance-stuck-in-provisioning-state-gpu) for
+> diagnosis steps.
+
 ---
 
 ### Deprecate an instance type
