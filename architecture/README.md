@@ -253,3 +253,8 @@ a source of truth for what devices exist and how exactly they are connected.
 OSAC expects to be able to utilize multiple different types of inventory source
 of truth. Work is underway to determine what inventory source of truth will be
 the primary focus for OSAC's reference implementation.
+
+One such source is NVIDIA Base Command Manager (BCM). See
+[BCM Inventory Backend](bcm-backend/) for the architecture, a
+[configuration guide](bcm-backend/configuration.md), and a
+[troubleshooting guide](bcm-backend/troubleshooting.md).
