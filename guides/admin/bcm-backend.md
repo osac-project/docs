@@ -136,12 +136,13 @@ bcm:
 #   bcmCerts: "osac-bcm-certs"          # OPTIONAL — only to rename the generated Secret (default: osac-bcm-certs)
 ```
 
-Only four values are mandatory: **`bcm.url`, `bcm.cert`, `bcm.key`, and
-`bcm.bmhNamespace`**. If `bcm.enabled: true` but any is unset, the Helm render
-fails with an explicit message. Everything else has a working default — including
-`secrets.bcmCerts` (`osac-bcm-certs`); override it only to rename the generated
-Secret (the chart renames the Secret, its mount, and the inventory
-`credentialsSecret` together, so it stays consistent).
+Set **`bcm.enabled: true`** to select the BCM backend (it defaults to `false`).
+When enabled, four values are mandatory — **`bcm.url`, `bcm.cert`, `bcm.key`, and
+`bcm.bmhNamespace`** — and the Helm render fails with an explicit message if any is
+unset. Everything else has a working default, including `secrets.bcmCerts`
+(`osac-bcm-certs`); override it only to rename the generated Secret (the chart
+renames the Secret, its mount, and the inventory `credentialsSecret` together, so
+it stays consistent).
 
 Deploy/upgrade with these values (via `osac-installer` or the operator chart).
 
@@ -182,8 +183,9 @@ ships:
 # 1. Operator started cleanly with the BCM backend (version check + BMH manager)
 oc logs deploy/bare-metal-fulfillment-operator -n osac | grep -iE "bcm|version|BMH manager"
 
-# 2. The generated Secrets exist (the cert Secret name follows secrets.bcmCerts)
-oc get secret osac-inventory-config osac-management-config "${BCM_CERTS_SECRET:-osac-bcm-certs}" -n osac
+# 2. The generated Secrets exist (osac-bcm-certs is the default — use your
+#    secrets.bcmCerts name if you renamed it)
+oc get secret osac-inventory-config osac-management-config osac-bcm-certs -n osac
 
 # 3. A registered LiteNode carries extra_values.resource_class.
 #    Verify the BCM server cert with --cacert (the CA you configured as bcm.caCert);
@@ -242,7 +244,7 @@ use a BCM certificate **profile scoped to these methods** rather than the full
 |-------|----------|------------|------------|
 | Operator won't start with BCM | Startup error mentioning version | BCM older than **10.25.3** (enforced via `GET /rest/v1/version`) | Upgrade BCM to ≥ 10.25.3. |
 | BCM unreachable | Instances stuck in `Allocating`; operator logs `Failed to find a free host` / `Failed to assign host`; `osac_bcm_api_requests_total{status="error"}` climbing | Network/DNS/firewall to `bcm.url`, or BCM down | Test reachability: `curl --cacert bcm-ca.pem --cert admin.pem --key admin.key https://<bcm-head>:8081/rest/v1/version` (client cert needed — `/json` requires mTLS). Fix routing/DNS. Retries are automatic. |
-| mTLS certificate expired/invalid | All BCM calls fail with a TLS error; all BCM-backed instances stall | Client cert expired, or `ca.crt` can't verify the BCM server | Update `bcm.cert`/`bcm.key` (Helm upgrade, or edit the `osac-bcm-certs` Secret). `certwatcher` reloads — **no restart**. Self-signed BCM server cert in test → `bcm.insecureSkipVerify: true`. |
+| mTLS certificate expired/invalid | All BCM calls fail with a TLS error; all BCM-backed instances stall | Client cert expired, or `ca.crt` can't verify the BCM server | Update `bcm.cert`/`bcm.key` (Helm upgrade, or edit the generated Secret — `secrets.bcmCerts`, default `osac-bcm-certs`). `certwatcher` reloads — **no restart**. Self-signed BCM server cert in test → `bcm.insecureSkipVerify: true`. |
 | Auth/permission error from BCM | TLS handshake failure or "does not allow access"; `status="error"` on BCM calls | Client cert not accepted, or its profile is too narrow | Confirm the cert's profile allows all six operator calls (see [scoped profile](#scoped-bcm-certificate-profile)). The `admin` profile always works. |
 | No matching host / pool exhausted | Instance stays in `Allocating`; condition `No matching hosts available`; `osac_bcm_hosts_available{host_type="X"}` is `0` | No free LiteNode with a matching `extra_values.resource_class` | Register more LiteNodes with the needed `resource_class` **in `extra_values`** (see [Step 1](#step-1-litenode-requirements-day-0)), or free hosts by deleting instances. |
 | Hosts registered but never selected | `osac_bcm_hosts_available` is `0` even though LiteNodes exist | `resource_class` is not set in the device's `extra_values` — the operator only reads `extra_values.resource_class` | Set `extra_values.resource_class` on each device (`getDevice` → add → `updateDevice`). |
@@ -357,14 +359,20 @@ each `BareMetalInstance` hangs in `Deleting` (the operator does not remove its
 inventory finalizer until `UnassignHost` succeeds, and BCM calls retry
 indefinitely). You can still force it, but you own the cleanup:
 
-1. Delete the `BareMetalInstance`s (they will sit in `Deleting`).
-2. Force-remove the operator's finalizers so they can be garbage-collected:
+1. Delete the `BareMetalInstance`s. Their ExternalIP, networking, and management
+   (power/deprovision) cleanup run normally — none of those need BCM — and each
+   then hangs in `Deleting` holding **only** the `osac.openshift.io/inventory`
+   finalizer, because `UnassignHost` can't reach BCM.
+2. Remove **only** that finalizer (leave any others intact so their controllers
+   still clean up):
    ```bash
-   oc patch baremetalinstance <name> -n <ns> --type=json \
-     -p='[{"op":"remove","path":"/metadata/finalizers"}]'
+   oc get baremetalinstance <name> -n <ns> -o json \
+     | jq '.metadata.finalizers |= map(select(. != "osac.openshift.io/inventory"))' \
+     | oc apply -f -
    ```
 3. Manually delete the orphaned on-demand BMH CRs and their operator-managed BMC
-   Secrets in `<bcm.bmhNamespace>`.
+   Secrets in `<bcm.bmhNamespace>` — this is the cleanup `UnassignHost` would have
+   done.
 4. Reconfigure the backend (`bcm.enabled: false` + the replacement) and roll out
    the operator.
 5. **When BCM comes back**, the affected devices still carry a stale
@@ -372,9 +380,9 @@ indefinitely). You can still force it, but you own the cleanup:
    assigned forever. Clear it on each: GET the device, remove
    `extra_values.osac_instance_id`, and `cmdevice.updateDevice` the whole object.
 
-> ⚠️ Forcing removes the operator's safety net — you own the BMH, Secret, and
-> BCM-reservation cleanup. Prefer the clean path whenever BCM can be brought back,
-> even briefly.
+> ⚠️ Removing the inventory finalizer skips the operator's BCM unassign — so you
+> own the BMH, Secret, and BCM-reservation cleanup (steps 3 and 5). Prefer the
+> clean path whenever BCM can be brought back, even briefly.
 
 **Switching *to* BCM:** existing instances from a previous backend are unaffected —
 they already have `hostClass` set, so they stay on the management path; only new
