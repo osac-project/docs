@@ -89,11 +89,13 @@ The SoftGate is the gateway between VPCs and the internet.
 graph TB
     internet((Internet))
 
-    mgmt_snat[Mgmt SNAT]
-    mgmt_api_dnat[Mgmt API DNAT :6443]
-    hosted_api_dnat[Hosted Cluster API DNAT :6443]
-    cluster_snat[Cluster SNAT]
-    ingress_dnat[Hosted Cluster Ingress DNAT :80/:443]
+    subgraph softgate [SoftGate]
+        mgmt_snat[Mgmt SNAT]
+        mgmt_api_dnat[Mgmt API DNAT :6443]
+        hosted_api_dnat[Hosted Cluster API DNAT :6443]
+        cluster_snat[Cluster SNAT]
+        ingress_dnat[Hosted Cluster Ingress DNAT :80/:443]
+    end
 
     subgraph mgmt_vpc [Management VPC]
         mgmt_gw[Anycast Gateway]
