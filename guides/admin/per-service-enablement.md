@@ -94,3 +94,102 @@ Helm can install or upgrade the release.
 
 The next sections show the complete installation, upgrade, verification, and
 troubleshooting procedures.
+
+## Dependency validation
+
+The umbrella chart validates the service combination before it creates or
+updates workloads:
+
+- CaaS can be enabled only when VMaaS or BMaaS is also enabled.
+- MaaS can be enabled only when CaaS is enabled.
+
+These rules are expressed in the chart's values.schema.json. Helm applies
+them to both helm install and helm upgrade. An invalid combination fails
+schema validation before the release is deployed or updated.
+
+For example, this configuration is invalid because CaaS has no compute
+backing service:
+
+    helm template osac charts/osac \
+      --set global.services.caas.enabled=true \
+      --set global.services.vmaas.enabled=false \
+      --set global.services.bmaas.enabled=false
+
+This configuration is invalid because MaaS requires CaaS:
+
+    helm template osac charts/osac \
+      --set global.services.maas.enabled=true \
+      --set global.services.caas.enabled=false
+
+The fulfillment-service validates the same service dependencies when it starts
+outside Helm. Its startup sequence first enables all four services when no
+enable flags are set, then validates the resulting flags before creating the
+server. The current error messages are:
+
+- invalid service flags: CaaS requires at least one of VMaaS or BMaaS
+- invalid service flags: MaaS requires CaaS
+
+The current osac-operator startup validation checks the CaaS dependency on at
+least one compute controller. MaaS has no operator controller, so the MaaS
+dependency is enforced by the Helm schema and fulfillment-service validation.
+
+## Install with selected services
+
+1. Copy the default values and set the service choices. This example keeps
+   CaaS and VMaaS enabled and disables BMaaS and MaaS:
+
+       global:
+         services:
+           caas:
+             enabled: true
+           vmaas:
+             enabled: true
+           bmaas:
+             enabled: false
+           maas:
+             enabled: false
+
+2. Install the umbrella chart:
+
+       helm install osac charts/osac \
+         --namespace <namespace> \
+         --create-namespace \
+         --values values.yaml
+
+3. Confirm the rendered result before applying it in a change-controlled
+   environment:
+
+       helm template osac charts/osac \
+         --namespace <namespace> \
+         --values values.yaml
+
+The rendered fulfillment-service containers contain only the enable flags for
+the selected tiers. The operator receives false for the BMaaS controller, and
+the BMF operator deployment is omitted. Shared infrastructure controllers and
+the BMF CRD dependency remain available.
+
+## Enable a service after installation
+
+To enable an additional service, update the matching global value and run
+helm upgrade. For example, to enable BMaaS:
+
+    global:
+      services:
+        bmaas:
+          enabled: true
+
+Then run:
+
+    helm upgrade osac charts/osac \
+      --namespace <namespace> \
+      --values values.yaml
+
+The upgrade rolls the affected workloads. The fulfillment-service starts with
+the BMaaS flag, the operator enables its bare-metal controller unless an
+explicit controller override says otherwise, and Helm creates the BMF operator
+deployment because its dependency condition is now true. Verify the effective
+state through the Capabilities endpoint after the rollout completes.
+
+This guide covers initial selective enablement and enabling an additional
+service. The lifecycle of resources that already exist when a service is
+disabled is not defined by this feature.
