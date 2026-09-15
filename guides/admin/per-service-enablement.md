@@ -23,16 +23,18 @@ OSAC has four service-tier switches:
 The default values keep all service tiers enabled. A service is disabled by
 setting its enabled value to false in the umbrella chart values:
 
-    global:
-      services:
-        caas:
-          enabled: true
-        vmaas:
-          enabled: true
-        bmaas:
-          enabled: false
-        maas:
-          enabled: false
+```yaml
+global:
+  services:
+    caas:
+      enabled: true
+    vmaas:
+      enabled: true
+    bmaas:
+      enabled: false
+    maas:
+      enabled: false
+```
 
 The service values are consumed by the fulfillment-service chart, the
 osac-operator chart, and the umbrella chart's bare-metal operator dependency.
@@ -110,16 +112,20 @@ schema validation before the release is deployed or updated.
 For example, this configuration is invalid because CaaS has no compute
 backing service:
 
-    helm template osac charts/osac \
-      --set global.services.caas.enabled=true \
-      --set global.services.vmaas.enabled=false \
-      --set global.services.bmaas.enabled=false
+```bash
+helm template osac charts/osac \
+  --set global.services.caas.enabled=true \
+  --set global.services.vmaas.enabled=false \
+  --set global.services.bmaas.enabled=false
+```
 
 This configuration is invalid because MaaS requires CaaS:
 
-    helm template osac charts/osac \
-      --set global.services.maas.enabled=true \
-      --set global.services.caas.enabled=false
+```bash
+helm template osac charts/osac \
+  --set global.services.maas.enabled=true \
+  --set global.services.caas.enabled=false
+```
 
 The fulfillment-service validates the same service dependencies when it starts
 outside Helm. Its startup sequence first enables all four services when no
@@ -138,30 +144,36 @@ dependency is enforced by the Helm schema and fulfillment-service validation.
 1. Copy the default values and set the service choices. This example keeps
    CaaS and VMaaS enabled and disables BMaaS and MaaS:
 
-       global:
-         services:
-           caas:
-             enabled: true
-           vmaas:
-             enabled: true
-           bmaas:
-             enabled: false
-           maas:
-             enabled: false
+   ```yaml
+   global:
+     services:
+       caas:
+         enabled: true
+       vmaas:
+         enabled: true
+       bmaas:
+         enabled: false
+       maas:
+         enabled: false
+   ```
 
 2. Install the umbrella chart:
 
-       helm install osac charts/osac \
-         --namespace <namespace> \
-         --create-namespace \
-         --values values.yaml
+   ```bash
+   helm install osac charts/osac \
+     --namespace <namespace> \
+     --create-namespace \
+     --values values.yaml
+   ```
 
 3. Confirm the rendered result before applying it in a change-controlled
    environment:
 
-       helm template osac charts/osac \
-         --namespace <namespace> \
-         --values values.yaml
+   ```bash
+   helm template osac charts/osac \
+     --namespace <namespace> \
+     --values values.yaml
+   ```
 
 The rendered fulfillment-service containers contain only the enable flags for
 the selected tiers. The operator receives false for the BMaaS controller, and
@@ -173,16 +185,20 @@ the BMF CRD dependency remain available.
 To enable an additional service, update the matching global value and run
 helm upgrade. For example, to enable BMaaS:
 
-    global:
-      services:
-        bmaas:
-          enabled: true
+```yaml
+global:
+  services:
+    bmaas:
+      enabled: true
+```
 
 Then run:
 
-    helm upgrade osac charts/osac \
-      --namespace <namespace> \
-      --values values.yaml
+```bash
+helm upgrade osac charts/osac \
+  --namespace <namespace> \
+  --values values.yaml
+```
 
 The upgrade rolls the affected workloads. The fulfillment-service starts with
 the BMaaS flag, the operator enables its bare-metal controller unless an
@@ -199,26 +215,32 @@ disabled is not defined by this feature.
 The public Capabilities endpoint is available without an authentication token.
 Query it after the deployment rollout:
 
-    curl --cacert <ca-bundle.pem> \
-      https://<public-api-host>/api/fulfillment/v1/capabilities | jq .
+```bash
+curl --cacert <ca-bundle.pem> \
+  https://<public-api-host>/api/fulfillment/v1/capabilities | jq .
+```
 
 For the partial configuration in this guide, the response includes:
 
-    {
-      "enabled_services": [
-        "caas",
-        "vmaas"
-      ]
-    }
+```json
+{
+  "enabled_services": [
+    "caas",
+    "vmaas"
+  ]
+}
+```
 
 The public and private Capabilities servers use the same service flags. To
 check the private API, use an authenticated gRPC request:
 
-    grpcurl \
-      -cacert <ca-bundle.pem> \
-      -H "authorization: Bearer $OSAC_TOKEN" \
-      <private-api-host>:443 \
-      osac.private.v1.Capabilities/Get
+```bash
+grpcurl \
+  -cacert <ca-bundle.pem> \
+  -H "authorization: Bearer $OSAC_TOKEN" \
+  <private-api-host>:443 \
+  osac.private.v1.Capabilities/Get
+```
 
 With all four services enabled, enabled_services contains caas, vmaas, bmaas,
 and maas. The list is generated from the process startup configuration and
@@ -235,7 +257,9 @@ for service-specific operations.
 Known service methods that are not enabled return codes.Unavailable. For
 example, calling a VMaaS method when VMaaS is disabled returns:
 
-    the VMaaS service is not enabled on this server
+```text
+the VMaaS service is not enabled on this server
+```
 
 The current service group names in this message are CaaS, VMaaS, and BMaaS.
 Calls to a genuinely unknown gRPC method retain the default
@@ -244,7 +268,9 @@ codes.Unimplemented response.
 Disabled service implementations are not registered with the gRPC server, so
 they do not appear in gRPC reflection. For example:
 
-    grpcurl -cacert <ca-bundle.pem> <public-api-host>:443 list
+```bash
+grpcurl -cacert <ca-bundle.pem> <public-api-host>:443 list
+```
 
 When BMaaS is disabled, the BMaaS service names should be absent while enabled
 CaaS and VMaaS services remain visible.
@@ -258,10 +284,12 @@ return a valid payload for the disabled service.
 
 For example:
 
-    curl --cacert <ca-bundle.pem> \
-      --header "authorization: Bearer $OSAC_TOKEN" \
-      --write-out "\n%{http_code}\n" \
-      https://<public-api-host>/api/fulfillment/v1/baremetal_instances
+```bash
+curl --cacert <ca-bundle.pem> \
+  --header "authorization: Bearer $OSAC_TOKEN" \
+  --write-out "\n%{http_code}\n" \
+  https://<public-api-host>/api/fulfillment/v1/baremetal_instances
+```
 
 An enabled service should return its normal API response. A disabled service
 should return 503.
@@ -279,19 +307,25 @@ At startup, fulfillment-service emits a Service enablement log entry containing
 the enabled service list. Use the workload logs to confirm the flags that the
 process accepted:
 
-    oc logs deploy/fulfillment-grpc-server -n <namespace> | grep "Service enablement"
+```bash
+oc logs deploy/fulfillment-grpc-server -n <namespace> | grep "Service enablement"
+```
 
 Requests rejected for a disabled service increment the current Prometheus
 counter:
 
-    fulfillment_disabled_service_requests_total
+```text
+fulfillment_disabled_service_requests_total
+```
 
 The current counter has one label, service. Its values use the service group
 names used by the handler, such as VMaaS or BMaaS. Query the metrics endpoint
 with:
 
-    curl --cacert <ca-bundle.pem> \
-      https://<metrics-host>/metrics | grep fulfillment_disabled_service_requests_total
+```bash
+curl --cacert <ca-bundle.pem> \
+  https://<metrics-host>/metrics | grep fulfillment_disabled_service_requests_total
+```
 
 The current implementation does not expose a method label on this counter.
 Do not use a method label when constructing an alert or dashboard until the
@@ -301,14 +335,18 @@ deployed implementation changes.
 
 When BMaaS is disabled, check both sides of the deployment:
 
-    oc get deployment -n <namespace> \
-      -l app.kubernetes.io/name=bare-metal-fulfillment-operator
+```bash
+oc get deployment -n <namespace> \
+  -l app.kubernetes.io/name=bare-metal-fulfillment-operator
+```
 
 The BMF operator deployment should be absent. Inspect the osac-operator
 deployment environment to confirm:
 
-    oc get deployment -n <namespace> \
-      -l app.kubernetes.io/name=operator -o yaml
+```bash
+oc get deployment -n <namespace> \
+  -l app.kubernetes.io/name=operator -o yaml
+```
 
 The OSAC_ENABLE_BAREMETAL_INSTANCE_CONTROLLER value should be false unless an
 explicit operator controller override changes it. The BMF CRD dependency
@@ -327,12 +365,14 @@ is active.
 After OSAC-4681 is included in the deployed version, verify the behavior with
 the public HostTypes API, preserving any user-supplied filter in the request:
 
-    grpcurl \
-      -cacert <ca-bundle.pem> \
-      -H "authorization: Bearer $OSAC_TOKEN" \
-      -d '{}' \
-      <public-api-host>:443 \
-      osac.public.v1.HostTypes/List
+```bash
+grpcurl \
+  -cacert <ca-bundle.pem> \
+  -H "authorization: Bearer $OSAC_TOKEN" \
+  -d '{}' \
+  <public-api-host>:443 \
+  osac.public.v1.HostTypes/List
+```
 
 The service-dependent behavior delivered by that change is:
 
