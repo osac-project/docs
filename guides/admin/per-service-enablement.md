@@ -193,3 +193,156 @@ state through the Capabilities endpoint after the rollout completes.
 This guide covers initial selective enablement and enabling an additional
 service. The lifecycle of resources that already exist when a service is
 disabled is not defined by this feature.
+
+## Verify enabled services
+
+The public Capabilities endpoint is available without an authentication token.
+Query it after the deployment rollout:
+
+    curl --cacert <ca-bundle.pem> \
+      https://<public-api-host>/api/fulfillment/v1/capabilities | jq .
+
+For the partial configuration in this guide, the response includes:
+
+    {
+      "enabled_services": [
+        "caas",
+        "vmaas"
+      ]
+    }
+
+The public and private Capabilities servers use the same service flags. To
+check the private API, use an authenticated gRPC request:
+
+    grpcurl \
+      -cacert <ca-bundle.pem> \
+      -H "authorization: Bearer $OSAC_TOKEN" \
+      <private-api-host>:443 \
+      osac.private.v1.Capabilities/Get
+
+With all four services enabled, enabled_services contains caas, vmaas, bmaas,
+and maas. The list is generated from the process startup configuration and
+does not change until the workload is restarted after a Helm upgrade.
+
+The Capabilities endpoint is intentionally anonymous on the public API. This
+allows clients to discover the available service tiers before authenticating
+for service-specific operations.
+
+## Disabled-service behavior
+
+### gRPC
+
+Known service methods that are not enabled return codes.Unavailable. For
+example, calling a VMaaS method when VMaaS is disabled returns:
+
+    the VMaaS service is not enabled on this server
+
+The current service group names in this message are CaaS, VMaaS, and BMaaS.
+Calls to a genuinely unknown gRPC method retain the default
+codes.Unimplemented response.
+
+Disabled service implementations are not registered with the gRPC server, so
+they do not appear in gRPC reflection. For example:
+
+    grpcurl -cacert <ca-bundle.pem> <public-api-host>:443 list
+
+When BMaaS is disabled, the BMaaS service names should be absent while enabled
+CaaS and VMaaS services remain visible.
+
+### REST
+
+The REST gateway currently registers generated handlers for all service
+groups. A request to a disabled service is sent to the fulfillment-service,
+where the gRPC request is rejected. The gateway returns HTTP 503 and does not
+return a valid payload for the disabled service.
+
+For example:
+
+    curl --cacert <ca-bundle.pem> \
+      --header "authorization: Bearer $OSAC_TOKEN" \
+      --write-out "\n%{http_code}\n" \
+      https://<public-api-host>/api/fulfillment/v1/baremetal_instances
+
+An enabled service should return its normal API response. A disabled service
+should return 503.
+
+### Shared infrastructure
+
+Disabling a service tier does not disable shared infrastructure. Tenant,
+networking, storage, Capabilities, and HostTypes services remain registered.
+The current checkout does not yet apply service filtering to HostTypes; see
+HostTypes behavior for the OSAC-4681 dependency.
+
+## Logs and metrics
+
+At startup, fulfillment-service emits a Service enablement log entry containing
+the enabled service list. Use the workload logs to confirm the flags that the
+process accepted:
+
+    oc logs deploy/fulfillment-grpc-server -n <namespace> | grep "Service enablement"
+
+Requests rejected for a disabled service increment the current Prometheus
+counter:
+
+    fulfillment_disabled_service_requests_total
+
+The current counter has one label, service. Its values use the service group
+names used by the handler, such as VMaaS or BMaaS. Query the metrics endpoint
+with:
+
+    curl --cacert <ca-bundle.pem> \
+      https://<metrics-host>/metrics | grep fulfillment_disabled_service_requests_total
+
+The current implementation does not expose a method label on this counter.
+Do not use a method label when constructing an alert or dashboard until the
+deployed implementation changes.
+
+## Controller and deployment checks
+
+When BMaaS is disabled, check both sides of the deployment:
+
+    oc get deployment -n <namespace> \
+      -l app.kubernetes.io/name=bare-metal-fulfillment-operator
+
+The BMF operator deployment should be absent. Inspect the osac-operator
+deployment environment to confirm:
+
+    oc get deployment -n <namespace> \
+      -l app.kubernetes.io/name=operator -o yaml
+
+The OSAC_ENABLE_BAREMETAL_INSTANCE_CONTROLLER value should be false unless an
+explicit operator controller override changes it. The BMF CRD dependency
+remains installed.
+
+## HostTypes behavior
+
+HostTypes is shared infrastructure and remains registered when VMaaS or BMaaS
+is disabled. In the current checkout, the HostTypes server does not yet apply
+service enablement flags: its List and Get operations still delegate to the
+normal host-type store without filtering by the enabled compute services.
+OSAC-4681 is the implementation work that adds this filtering. Do not use a
+HostTypes response from this version as proof that disabled-service filtering
+is active.
+
+After OSAC-4681 is included in the deployed version, verify the behavior with
+the public HostTypes API, preserving any user-supplied filter in the request:
+
+    grpcurl \
+      -cacert <ca-bundle.pem> \
+      -H "authorization: Bearer $OSAC_TOKEN" \
+      -d '{}' \
+      <public-api-host>:443 \
+      osac.public.v1.HostTypes/List
+
+The service-dependent behavior delivered by that change is:
+
+- VMaaS enabled and BMaaS disabled: entries with empty interfaces remain;
+  entries with non-empty interfaces are excluded.
+- BMaaS enabled and VMaaS disabled: entries with non-empty interfaces remain;
+  entries with empty interfaces are excluded.
+- Both VMaaS and BMaaS disabled: List returns no host types.
+- Get returns NotFound when the requested host type is excluded by the active
+  service configuration.
+
+The filtering applies in addition to the caller's normal HostTypes filter. The
+HostTypes API itself remains available in every service combination.
