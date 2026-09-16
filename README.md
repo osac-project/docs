@@ -18,9 +18,9 @@ and service providers want to offer their own cloud services under local
 jurisdiction and specific compliance regimes. Use cases include traditional
 VMaaS clouds, neoclouds, and sovereign clouds.
 
-Open Sovereign AI Cloud (OSAC) is an open source project for organizations
+Open Sovereign AI Cloud (OSAC) is an open-source project for organizations
 standing up their own clouds. It offers multi-tenant self-service provisioning
-of VMs, OpenShift clusters, bare metal servers, Model-aaS, and more. OSAC
+of VMs, OpenShift clusters, bare-metal servers, Model-aaS, and more. OSAC
 offers standard cloud features including tenancy, RBAC, quota, metering, and
 tenant isolation at every layer.
 
@@ -37,7 +37,7 @@ BMaaS is needed by tenants who want to install their own workload management
 software (e.g., SLURM), and tenants who want OpenShift clusters with bare
 metal nodes.
 
-**VMaaS** allows tenenats to create virtual machines using primitives that are
+**VMaaS** allows tenants to create virtual machines using primitives that are
 familiar to users of public clouds. VMaaS utilizes [Kubevirt](https://kubevirt.io/)
 as the backend VM platform.
 
@@ -67,7 +67,7 @@ while provisioning and managing cloud services.
 
 Furthermore, CSPs have good reason to customize the details of how provisionable
 assets, such as VMs and Clusters, get implemented. For example a CSP may need to
-influence to way kubevirt APIs are utilized in order to include
+influence the way kubevirt APIs are utilized in order to include
 hardware-specific optimizations or other features. Or they may need to customize
 the way OpenShift clusters are created in order to turn on or off certain
 features.
