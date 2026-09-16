@@ -13,83 +13,108 @@ administrators and developers.
 
 ## Introduction
 
-There is a worldwide trend towards Sovereign AI Clouds (SACs), where countries
-and corporations want to have their own clouds with their own rules. This
-document presents a high-level overview of Open Sovereign AI Cloud (O-SAC), an
-open source solution for organizations standing up their own clouds. A solution
-here means that the offering:
+There is a worldwide trend towards local and specialized clouds, where countries
+and service providers want to offer their own cloud services under local
+jurisdiction and specific compliance regimes. Use cases include traditional
+VMaaS clouds, neoclouds, and sovereign clouds.
 
-1. includes a complete set of technologies and components
-2. is prescriptive in only using validated components and technologies
+Open Sovereign AI Cloud (OSAC) is an open source project for organizations
+standing up their own clouds. It offers multi-tenant self-service provisioning
+of VMs, OpenShift clusters, bare metal servers, Model-aaS, and more. OSAC
+offers standard cloud features including tenancy, RBAC, quota, metering, and
+tenant isolation at every layer.
 
-A validated component or technology is one that we have, potentially with a
-partner, integrated successfully into the solution and demonstrated successfully
-as part of the deployed solution.
+OSAC interfaces:
+* **gRPC API**: scalable, secure, and safe to put in front of unrelated tenants. It is standards-based and designed for automation.
+* **CLI**: an out-of-the-box CLI for admins and tenants to accomplish their work with OSAC.
+* **UI**: a brandable web interface for service providers who prefer an out-of-the-box UI vs building their own.
 
-An end-to-end prescriptive solution with specific technology choices (e.g.,
-GPUs, switches, observability tools, billing model) is needed to solve
-scalability, compliance and performance. While cloud provider environments are
-highly variable, a complete end-to-end open-source solution will be valuable for
-some clouds, and will hopefully provide a good starting point that others can
-modify to meet their needs.
+## Core Services
 
-![OSAC layers](images/OSAC-layers.jpg)
+**Bare Metal-aaS** allows tenants to allocate groups of computers, place those
+computers on isolated networks, and manage/configure those computers themselves.
+BMaaS is needed by tenants who want to install their own workload management
+software (e.g., SLURM), and tenants who want OpenShift clusters with bare
+metal nodes.
 
-As shown in Fig1, O-SAC currently supports a multi-tenant Bare Metal Cluster-aaS
-(dark blue) where tenants can easily spin up their own environment. Each tenant
-has their own strongly isolated OpenShift cluster configured with the tools and
-services they select from a set of provided options. Tenants and end-users have
-access to the observability tools needed to debug their applications,
-automation/logging needed to meet their compliance requirements, fine grained
-monitoring, and cost management needed to make rational decisions about their
-resource use.
+**VMaaS** allows tenenats to create virtual machines using primitives that are
+familiar to users of public clouds. VMaaS utilizes [Kubevirt](https://kubevirt.io/)
+as the backend VM platform.
 
-Bare Metal-aaS, under development, will allow tenants to allocate isolated
-groups of computers, place those computers on networks, and manage/configure
-those computers themselves. This service is needed, for example, by tenants that
-want to install their own cluster software (e.g., SLURM) and developers that
-are, for example, working on upstream k8s. 
+**Cluster-aaS** creates OpenShift clusters on demand. By default it uses [Hosted
+Control
+Planes](https://www.redhat.com/en/topics/containers/what-are-hosted-control-planes)
+to achieve the best compute density, provision quickly, and give the service
+provider exclusive access to manage critical parts of the control plane.
+Cluster-aaS utilizes BMaaS and VMaaS to provision nodes.
 
-Most of the development has so far focused on the lower layer services as a
-basis for a rich set of higher level services that are in plan. The one higher
-level service that is today under development, VM-aaS, will allow users to spin
-up their own individual VMs. 
+**Model-aaS** (MaaS) delivers token-based access to cloud-local inference
+endpoints running a curated selection of models. MaaS builds on [OpenShift AI's
+MaaS](https://www.redhat.com/en/products/ai/openshift-ai), which is implemented
+with [vLLM](https://vllm.ai/).
 
-O-SAC is being developed and continuously deployed at the [Mass Open
+In addition to the above, OSAC includes a number of supporting services such as
+standard cloud storage features and isolated networking via a full Virtual
+Private Cloud (VPC) implementation.
+
+## Customization
+
+Each Cloud Service Provider (CSP) makes their own choices about the supporting
+infrastructure on which their cloud runs. Those choices include server hardware,
+network gear and fabric, GPU selection, hardware inventory, storage solution,
+DNS platform, secret store, etc. OSAC needs to interface with each of those
+while provisioning and managing cloud services.
+
+Furthermore, CSPs have good reason to customize the details of how provisionable
+assets, such as VMs and Clusters, get implemented. For example a CSP may need to
+influence to way kubevirt APIs are utilized in order to include
+hardware-specific optimizations or other features. Or they may need to customize
+the way OpenShift clusters are created in order to turn on or off certain
+features.
+
+OSAC comes out of the box with working default implementations, while enabling
+the CSP to customize or even replace portions of OSAC's workflows. OSAC does so
+by utilizing Ansible roles to implement those portions of workflows that CSPs
+may need to customize.
+
+[Ansible Automation
+Platform](https://www.redhat.com/en/technologies/management/ansible) (AAP) comes
+with an extensive [ecosystem of
+Collections](https://docs.ansible.com/projects/ansible/latest/collections/index.html)
+that can interface with most of the infrastructure that would be found in a
+datacenter. That ecosystem, combined with AAP's job management capabilities,
+make AAP an ideal execution engine for OSAC.
+
+## Development
+
+OSAC is being developed with and continuously deployed at the [Mass Open
 Cloud](https://massopen.cloud/) (MOC) to take advantage of the MOC’s scale, to
 provide industry and academic partners a public environment where they can
 integrate their hardware and services into the solution, and to ensure the
 solution can address the needs of a production environment with a large
-community of AI users. O-SAC began with contributions from the MOC, Red Hat
+community of AI users. OSAC began with contributions from the MOC, Red Hat
 Ecosystem Engineering, Red Hat Research, and IBM Research, and hopes to attract
 a broader community of developers and early adopters that will help prioritize
 and help develop features.
 
 ## Terms and Definitions
 
-MOC: The MassOpen Cloud (MOC) is a public computing cloud where the Open
-Sovereign AI Cloud is being deployed.
-
-Cloud Provider: Cloud providers are organizations that offer compute resources
-for rent to multiple unrelated tenants / customers.
-
-Tenant: A user or group of people with the ability to self-service provision
-clusters; acts as a cluster administrator for their own cluster(s). An end user
-of the O-SAC solution.
-
-Tenant Cluster: An running OpenShift cluster requested by a tenant.
-
-HCP: (HyperShift) Hosted Control Plane refers to an architecture where the
-control plane of a Kubernetes cluster is decoupled from the worker nodes and
-hosted separately, often on a different infrastructure managed by a cloud
-provider or a separate cluster. 
-
 ACM: Advanced Cluster Management (ACM) is a Red Hat product that simplifies the
 provisioning and management of multiple Kubernetes (OpenShift) clusters.
 
-GDPR: The General Data Protection Regulation (GDPR), is a European Union law
-focused on data protection and privacy for individuals within the EU. O-SAC will
-have to comply with these regulations.
+Cloud Service Provider: CSPs are organizations that offer compute resources for
+rent to multiple unrelated tenants / customers.
+
+HCP: (HyperShift) Hosted Control Plane refers to an architecture where the
+control plane of an OpenShift cluster is decoupled from the worker nodes and run
+as Pods on a separate hosting cluster.
+
+MOC: The MassOpen Cloud (MOC) is a public computing cloud where the Open
+Sovereign AI Cloud is being deployed.
+
+Tenant: A user or group of people with the ability to self-service provision
+clusters; acts as a cluster administrator for their own cluster(s). An end user
+of the OSAC solution.
 
 See [personas.md](personas.md) for a description of OSAC personas.
 
